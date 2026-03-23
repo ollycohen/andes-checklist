@@ -194,6 +194,9 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
   const plotW = dims.w - pad.left - pad.right;
   const plotH = dims.h - pad.top - pad.bottom;
 
+  // Deterministic hash for consistent jitter per item
+  const hashId = (id) => { let h = 0; for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0; return h; };
+
   const points = [];
   let ci = 0;
   for (const cat of tasks) {
@@ -205,15 +208,17 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
           const p = sub.priority != null ? sub.priority : (item.priority || 3);
           const d = sub.date || item.date || null;
           const days = daysUntil(d);
-          let urgency = 0.15;
-          if (days !== null) urgency = Math.max(0, Math.min(1, 1 - days / 90));
-          points.push({ id: sub.id, parentId: item.id, text: sub.text, catIdx: ci, urgency, importance: p / 5, priority: p, date: d, days, color: catColors[ci % catColors.length] });
+          let urgency, hasDate = days !== null;
+          if (hasDate) { urgency = Math.max(0.02, Math.min(0.98, 1 - days / 90)); }
+          else { urgency = 0.08 + (((hashId(sub.id) & 0xFFFF) / 0xFFFF) * 0.25); }
+          points.push({ id: sub.id, parentId: item.id, text: sub.text, catIdx: ci, urgency, importance: p / 5, priority: p, date: d, days, hasDate, color: catColors[ci % catColors.length] });
         }
       } else {
         const days = daysUntil(item.date);
-        let urgency = 0.15;
-        if (days !== null) urgency = Math.max(0, Math.min(1, 1 - days / 90));
-        points.push({ id: item.id, parentId: null, text: item.text, catIdx: ci, urgency, importance: (item.priority || 3) / 5, priority: item.priority || 3, date: item.date, days, color: catColors[ci % catColors.length] });
+        let urgency, hasDate = days !== null;
+        if (hasDate) { urgency = Math.max(0.02, Math.min(0.98, 1 - days / 90)); }
+        else { urgency = 0.08 + (((hashId(item.id) & 0xFFFF) / 0xFFFF) * 0.25); }
+        points.push({ id: item.id, parentId: null, text: item.text, catIdx: ci, urgency, importance: (item.priority || 3) / 5, priority: item.priority || 3, date: item.date, days, hasDate, color: catColors[ci % catColors.length] });
       }
     }
     ci++;
@@ -269,7 +274,7 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
         e("line", { x1: pad.left-5, y1: y, x2: pad.left, y2: y, stroke: "#ccc" }),
         e("text", { x: pad.left-9, y: y+4, textAnchor: "end", fontSize: 9, fill: "#999", fontFamily: "IBM Plex Mono, monospace" }, d === 0 ? "now" : d+"d"),
       ); }),
-      // Points
+      // Points — filled for dated, hollow ring for undated
       points.map(pt => {
         const cx = toSvgX(pt.importance), cy = toSvgY(pt.urgency);
         const isDrag = dragging === pt.id, isHov = tooltip === pt.id;
@@ -279,12 +284,19 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
         const textX = flipLeft ? cx - tipW - 4 : cx + 20;
         return e("g", { key: pt.id },
           (isDrag || isHov) && e("circle", { cx, cy, r: 14, fill: pt.color, opacity: 0.15 }),
-          e("circle", { cx, cy, r: isDrag ? 8 : 6, fill: pt.color, stroke: "#fff", strokeWidth: 2,
-            style: { cursor: "grab", transition: isDrag ? "none" : "all 0.2s ease" },
-            onPointerDown: (ev) => onPointerDown(ev, pt),
-            onPointerEnter: () => setTooltip(pt.id),
-            onPointerLeave: () => { if (!dragging) setTooltip(null); },
-          }),
+          pt.hasDate
+            ? e("circle", { cx, cy, r: isDrag ? 8 : 6, fill: pt.color, stroke: "#fff", strokeWidth: 2,
+                style: { cursor: "grab", transition: isDrag ? "none" : "all 0.2s ease" },
+                onPointerDown: (ev) => onPointerDown(ev, pt),
+                onPointerEnter: () => setTooltip(pt.id),
+                onPointerLeave: () => { if (!dragging) setTooltip(null); },
+              })
+            : e("circle", { cx, cy, r: isDrag ? 8 : 6, fill: "#FAFAF8", stroke: pt.color, strokeWidth: 2.5,
+                style: { cursor: "grab", transition: isDrag ? "none" : "all 0.2s ease" },
+                onPointerDown: (ev) => onPointerDown(ev, pt),
+                onPointerEnter: () => setTooltip(pt.id),
+                onPointerLeave: () => { if (!dragging) setTooltip(null); },
+              }),
           (isHov || isDrag) && e("g", null,
             e("rect", { x: tx, y: cy - 28, width: tipW, height: 38, rx: 4, fill: "#1a1a1a", opacity: 0.92 }),
             e("text", { x: textX, y: cy - 14, fontSize: 10, fontWeight: 600, fill: "#fff", fontFamily: "IBM Plex Mono, monospace" }, pt.text.length > 28 ? pt.text.slice(0,28) + "\u2026" : pt.text),
@@ -301,7 +313,17 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
           e("div", { style: { width: 8, height: 8, borderRadius: "50%", background: catColors[i % catColors.length] } }),
           e("span", { style: { fontSize: 9, color: "#888", fontFamily: "IBM Plex Mono, monospace", letterSpacing: "0.3px" } }, cat.category),
         );
-      })
+      }),
+      e("div", { style: { display: "flex", alignItems: "center", gap: 10, marginLeft: 8, borderLeft: "1px solid #e5e5e0", paddingLeft: 12 } },
+        e("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
+          e("div", { style: { width: 8, height: 8, borderRadius: "50%", background: "#999" } }),
+          e("span", { style: { fontSize: 9, color: "#888", fontFamily: "IBM Plex Mono, monospace" } }, "dated"),
+        ),
+        e("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
+          e("div", { style: { width: 8, height: 8, borderRadius: "50%", background: "transparent", border: "2px solid #999", boxSizing: "border-box" } }),
+          e("span", { style: { fontSize: 9, color: "#888", fontFamily: "IBM Plex Mono, monospace" } }, "no date"),
+        ),
+      ),
     ),
   );
 }
