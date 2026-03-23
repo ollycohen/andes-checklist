@@ -195,7 +195,7 @@
           "text": "Plan March 31st event",
           "done": false,
           "priority": 5,
-          "date": "2026-03-31"
+          "date": "2026-04-07"
         },
         {
           "id": "h2",
@@ -228,5 +228,5 @@
       ]
     }
   ],
-  "updatedAt": "2026-03-23T21:43:21.998Z"
+  "updatedAt": "2026-03-23T21:43:43.679Z"
 }
