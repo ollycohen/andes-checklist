@@ -194,10 +194,8 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
   const plotW = dims.w - pad.left - pad.right;
   const plotH = dims.h - pad.top - pad.bottom;
 
-  // Deterministic hash for consistent jitter per item
-  const hashId = (id) => { let h = 0; for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0; return h; };
-
-  const points = [];
+  // Collect raw points first, then space out undated ones to prevent overlap
+  const rawPoints = [];
   let ci = 0;
   for (const cat of tasks) {
     for (const item of cat.items) {
@@ -208,21 +206,34 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
           const p = sub.priority != null ? sub.priority : (item.priority || 3);
           const d = sub.date || item.date || null;
           const days = daysUntil(d);
-          let urgency, hasDate = days !== null;
-          if (hasDate) { urgency = Math.max(0.02, Math.min(0.98, 1 - days / 90)); }
-          else { urgency = 0.08 + (((hashId(sub.id) & 0xFFFF) / 0xFFFF) * 0.25); }
-          points.push({ id: sub.id, parentId: item.id, text: sub.text, catIdx: ci, urgency, importance: p / 5, priority: p, date: d, days, hasDate, color: catColors[ci % catColors.length] });
+          const hasDate = days !== null;
+          const urgency = hasDate ? Math.max(0.02, Math.min(0.98, 1 - days / 90)) : null;
+          rawPoints.push({ id: sub.id, parentId: item.id, text: sub.text, catIdx: ci, urgency, importance: p / 5, priority: p, date: d, days, hasDate, color: catColors[ci % catColors.length] });
         }
       } else {
         const days = daysUntil(item.date);
-        let urgency, hasDate = days !== null;
-        if (hasDate) { urgency = Math.max(0.02, Math.min(0.98, 1 - days / 90)); }
-        else { urgency = 0.08 + (((hashId(item.id) & 0xFFFF) / 0xFFFF) * 0.25); }
-        points.push({ id: item.id, parentId: null, text: item.text, catIdx: ci, urgency, importance: (item.priority || 3) / 5, priority: item.priority || 3, date: item.date, days, hasDate, color: catColors[ci % catColors.length] });
+        const hasDate = days !== null;
+        const urgency = hasDate ? Math.max(0.02, Math.min(0.98, 1 - days / 90)) : null;
+        rawPoints.push({ id: item.id, parentId: null, text: item.text, catIdx: ci, urgency, importance: (item.priority || 3) / 5, priority: item.priority || 3, date: item.date, days, hasDate, color: catColors[ci % catColors.length] });
       }
     }
     ci++;
   }
+
+  // Space undated points evenly across urgency 0.05–0.45, staggered by priority
+  const undated = rawPoints.filter(p => !p.hasDate);
+  const byPriority = {};
+  undated.forEach(p => { (byPriority[p.priority] = byPriority[p.priority] || []).push(p); });
+  Object.values(byPriority).forEach(group => {
+    const n = group.length;
+    group.forEach((p, i) => {
+      p.urgency = n === 1 ? 0.22 : 0.05 + (i / (n - 1)) * 0.40;
+      // Small x offset per category so same-priority items from different categories don't overlap
+      p.importance = Math.max(0.05, Math.min(0.98, p.importance + (p.catIdx - 3) * 0.015));
+    });
+  });
+
+  const points = rawPoints;
 
   const toSvgX = (imp) => pad.left + imp * plotW;
   const toSvgY = (urg) => pad.top + (1 - urg) * plotH;
