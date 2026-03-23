@@ -2,7 +2,7 @@
   "tasks": [
     {
       "category": "ANDES EXPEDITION",
-      "icon": "⛰️",
+      "icon": "â°ï¸",
       "items": [
         {
           "id": "a1",
@@ -13,7 +13,7 @@
         },
         {
           "id": "a2",
-          "text": "Confirm guide for Pico Cristóbal Colón",
+          "text": "Confirm guide for Pico CristÃ³bal ColÃ³n",
           "done": false,
           "priority": 5,
           "date": null
@@ -43,7 +43,7 @@
     },
     {
       "category": "GEAR",
-      "icon": "🎒",
+      "icon": "ð",
       "items": [
         {
           "id": "g1",
@@ -70,7 +70,7 @@
     },
     {
       "category": "SKILLS & TRAINING",
-      "icon": "🧗",
+      "icon": "ð§",
       "items": [
         {
           "id": "s1",
@@ -95,7 +95,7 @@
         },
         {
           "id": "s4",
-          "text": "Keep training — stay in shape",
+          "text": "Keep training â stay in shape",
           "done": false,
           "priority": 5,
           "date": null
@@ -104,7 +104,7 @@
     },
     {
       "category": "WORK",
-      "icon": "💻",
+      "icon": "ð»",
       "items": [
         {
           "id": "w1",
@@ -124,7 +124,7 @@
     },
     {
       "category": "MEDIA",
-      "icon": "📸",
+      "icon": "ð¸",
       "items": [
         {
           "id": "m1",
@@ -151,29 +151,29 @@
     },
     {
       "category": "TRIPS",
-      "icon": "✈️",
+      "icon": "âï¸",
       "items": [
         {
           "id": "tr1",
           "text": "California",
-          "done": false,
+          "done": true,
           "priority": 4,
           "date": "2026-03-12",
           "subtasks": [
             {
               "id": "tr1-a",
-              "text": "Buy SEA → LAX",
+              "text": "Buy SEA â LAX",
               "done": true
             },
             {
               "id": "tr1-b",
-              "text": "Buy LAX → SFO (Mar 17)",
-              "done": false
+              "text": "Buy LAX â SFO (Mar 17)",
+              "done": true
             },
             {
               "id": "tr1-c",
-              "text": "Buy SFO → SEA (Mar 22)",
-              "done": false
+              "text": "Buy SFO â SEA (Mar 22)",
+              "done": true
             }
           ]
         },
@@ -188,7 +188,7 @@
     },
     {
       "category": "HOME & LIFE",
-      "icon": "🏠",
+      "icon": "ð ",
       "items": [
         {
           "id": "h1",
@@ -228,5 +228,5 @@
       ]
     }
   ],
-  "updatedAt": "2026-03-23T21:19:09.607Z"
+  "updatedAt": "2026-03-23T21:43:11.980Z"
 }
