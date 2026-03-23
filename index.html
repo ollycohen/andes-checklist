@@ -107,7 +107,7 @@ async function fetchRemoteTasks() {
     if (!resp.ok) throw new Error("GitHub fetch failed: " + resp.status);
     const data = await resp.json();
     _fileSha = data.sha;
-    const content = JSON.parse(atob(data.content));
+    const content = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(data.content), c => c.charCodeAt(0))));
     return content.tasks || null;
   } catch(err) { console.error("Sync fetch error:", err); return null; }
 }
@@ -116,7 +116,8 @@ async function pushRemoteTasks(tasks) {
   if (!SYNC_ENABLED) return { ok: false, error: "No token" };
   try {
     const payload = { tasks, updatedAt: new Date().toISOString() };
-    const body = { message: "sync: update checklist", content: btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2)))), };
+    const encoded = new TextEncoder().encode(JSON.stringify(payload, null, 2));
+    const body = { message: "sync: update checklist", content: btoa(String.fromCharCode(...encoded)), };
     if (_fileSha) body.sha = _fileSha;
     const resp = await fetch("https://api.github.com/repos/" + GITHUB_REPO + "/contents/" + GITHUB_DATA_PATH, {
       method: "PUT",
