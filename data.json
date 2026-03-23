@@ -1,0 +1,232 @@
+{
+  "tasks": [
+    {
+      "category": "ANDES EXPEDITION",
+      "icon": "⛰️",
+      "items": [
+        {
+          "id": "a1",
+          "text": "Map route across the whole Andes",
+          "done": false,
+          "priority": 5,
+          "date": null
+        },
+        {
+          "id": "a2",
+          "text": "Confirm guide for Pico Cristóbal Colón",
+          "done": false,
+          "priority": 5,
+          "date": null
+        },
+        {
+          "id": "a3",
+          "text": "Follow up with Gregg Treinish about why he skipped Colombia",
+          "done": false,
+          "priority": 4,
+          "date": null
+        },
+        {
+          "id": "a4",
+          "text": "Buy plane ticket to Barranquilla",
+          "done": false,
+          "priority": 5,
+          "date": null
+        },
+        {
+          "id": "a5",
+          "text": "Get running stuff ready",
+          "done": false,
+          "priority": 3,
+          "date": null
+        }
+      ]
+    },
+    {
+      "category": "GEAR",
+      "icon": "🎒",
+      "items": [
+        {
+          "id": "g1",
+          "text": "Buy tent",
+          "done": false,
+          "priority": 5,
+          "date": null
+        },
+        {
+          "id": "g2",
+          "text": "Buy clothes",
+          "done": false,
+          "priority": 4,
+          "date": null
+        },
+        {
+          "id": "g3",
+          "text": "Get backpack",
+          "done": false,
+          "priority": 4,
+          "date": null
+        }
+      ]
+    },
+    {
+      "category": "SKILLS & TRAINING",
+      "icon": "🧗",
+      "items": [
+        {
+          "id": "s1",
+          "text": "Climb Mt. Hood with Barton",
+          "done": false,
+          "priority": 4,
+          "date": null
+        },
+        {
+          "id": "s2",
+          "text": "Trad climb at Index",
+          "done": false,
+          "priority": 4,
+          "date": null
+        },
+        {
+          "id": "s3",
+          "text": "Ski traverse",
+          "done": false,
+          "priority": 3,
+          "date": null
+        },
+        {
+          "id": "s4",
+          "text": "Keep training — stay in shape",
+          "done": false,
+          "priority": 5,
+          "date": null
+        }
+      ]
+    },
+    {
+      "category": "WORK",
+      "icon": "💻",
+      "items": [
+        {
+          "id": "w1",
+          "text": "Release new app with web form editor",
+          "done": false,
+          "priority": 5,
+          "date": null
+        },
+        {
+          "id": "w2",
+          "text": "Hexnode CI/CD pipeline",
+          "done": false,
+          "priority": 4,
+          "date": null
+        }
+      ]
+    },
+    {
+      "category": "MEDIA",
+      "icon": "📸",
+      "items": [
+        {
+          "id": "m1",
+          "text": "Deborah cookies",
+          "done": false,
+          "priority": 2,
+          "date": null
+        },
+        {
+          "id": "m2",
+          "text": "Snowpit test",
+          "done": false,
+          "priority": 2,
+          "date": null
+        },
+        {
+          "id": "m3",
+          "text": "Update website",
+          "done": false,
+          "priority": 3,
+          "date": null
+        }
+      ]
+    },
+    {
+      "category": "TRIPS",
+      "icon": "✈️",
+      "items": [
+        {
+          "id": "tr1",
+          "text": "California",
+          "done": false,
+          "priority": 4,
+          "date": "2026-03-12",
+          "subtasks": [
+            {
+              "id": "tr1-a",
+              "text": "Buy SEA → LAX",
+              "done": true
+            },
+            {
+              "id": "tr1-b",
+              "text": "Buy LAX → SFO (Mar 17)",
+              "done": false
+            },
+            {
+              "id": "tr1-c",
+              "text": "Buy SFO → SEA (Mar 22)",
+              "done": false
+            }
+          ]
+        },
+        {
+          "id": "tr2",
+          "text": "NYC",
+          "done": false,
+          "priority": 4,
+          "date": null
+        }
+      ]
+    },
+    {
+      "category": "HOME & LIFE",
+      "icon": "🏠",
+      "items": [
+        {
+          "id": "h1",
+          "text": "Plan March 31st event",
+          "done": false,
+          "priority": 5,
+          "date": "2026-03-31"
+        },
+        {
+          "id": "h2",
+          "text": "Go to dentist",
+          "done": false,
+          "priority": 2,
+          "date": null
+        },
+        {
+          "id": "h3",
+          "text": "Sell Jimny",
+          "done": false,
+          "priority": 4,
+          "date": null
+        },
+        {
+          "id": "h4",
+          "text": "Sell Volvo",
+          "done": false,
+          "priority": 4,
+          "date": null
+        },
+        {
+          "id": "h5",
+          "text": "Put stuff in storage",
+          "done": false,
+          "priority": 3,
+          "date": null
+        }
+      ]
+    }
+  ],
+  "updatedAt": "2026-03-23T21:19:09.607Z"
+}
