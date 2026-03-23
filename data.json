@@ -38,6 +38,13 @@
           "done": false,
           "priority": 3,
           "date": null
+        },
+        {
+          "id": "c-1774302245546",
+          "text": "Create base pitch for Gear Sponsors",
+          "done": false,
+          "priority": 3,
+          "date": null
         }
       ]
     },
@@ -228,5 +235,5 @@
       ]
     }
   ],
-  "updatedAt": "2026-03-23T21:43:43.679Z"
+  "updatedAt": "2026-03-23T21:44:07.547Z"
 }
