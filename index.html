@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Andes Expedition — Checklist</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛰️</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #FAFAF8; font-family: 'IBM Plex Mono', monospace; color: #1a1a1a; -webkit-font-smoothing: antialiased; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script>
+const e = React.createElement;
+const { useState, useEffect, useCallback, useRef } = React;
+
+const TODAY = new Date();
+const formatDate = (d) => { if (!d) return ""; return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
+const daysUntil = (d) => { if (!d) return null; return Math.ceil((new Date(d) - TODAY) / 86400000); };
+
+const INITIAL_TASKS = [
+  { category: "ANDES EXPEDITION", icon: "\u26f0\ufe0f", items: [
+    { id: "a1", text: "Map route across the whole Andes", done: false, priority: 5, date: null },
+    { id: "a2", text: "Confirm guide for Pico Crist\u00f3bal Col\u00f3n", done: false, priority: 5, date: null },
+    { id: "a3", text: "Follow up with Gregg Treinish about why he skipped Colombia", done: false, priority: 4, date: null },
+    { id: "a4", text: "Buy plane ticket to Barranquilla", done: false, priority: 5, date: null },
+    { id: "a5", text: "Get running stuff ready", done: false, priority: 3, date: null },
+  ]},
+  { category: "GEAR", icon: "\ud83c\udf92", items: [
+    { id: "g1", text: "Buy tent", done: false, priority: 5, date: null },
+    { id: "g2", text: "Buy clothes", done: false, priority: 4, date: null },
+    { id: "g3", text: "Get backpack", done: false, priority: 4, date: null },
+  ]},
+  { category: "SKILLS & TRAINING", icon: "\ud83e\uddd7", items: [
+    { id: "s1", text: "Climb Mt. Hood with Barton", done: false, priority: 4, date: null },
+    { id: "s2", text: "Trad climb at Index", done: false, priority: 4, date: null },
+    { id: "s3", text: "Ski traverse", done: false, priority: 3, date: null },
+    { id: "s4", text: "Keep training \u2014 stay in shape", done: false, priority: 5, date: null },
+  ]},
+  { category: "WORK", icon: "\ud83d\udcbb", items: [
+    { id: "w1", text: "Release new app with web form editor", done: false, priority: 5, date: null },
+    { id: "w2", text: "Hexnode CI/CD pipeline", done: false, priority: 4, date: null },
+  ]},
+  { category: "MEDIA", icon: "\ud83d\udcf8", items: [
+    { id: "m1", text: "Deborah cookies", done: false, priority: 2, date: null },
+    { id: "m2", text: "Snowpit test", done: false, priority: 2, date: null },
+    { id: "m3", text: "Update website", done: false, priority: 3, date: null },
+  ]},
+  { category: "TRIPS", icon: "\u2708\ufe0f", items: [
+    { id: "tr1", text: "California", done: false, priority: 4, date: "2026-03-12", subtasks: [
+      { id: "tr1-a", text: "Buy SEA \u2192 LAX", done: true },
+      { id: "tr1-b", text: "Buy LAX \u2192 SFO (Mar 17)", done: false },
+      { id: "tr1-c", text: "Buy SFO \u2192 SEA (Mar 22)", done: false },
+    ]},
+    { id: "tr2", text: "NYC", done: false, priority: 4, date: null },
+  ]},
+  { category: "HOME & LIFE", icon: "\ud83c\udfe0", items: [
+    { id: "h1", text: "Plan March 31st event", done: false, priority: 5, date: "2026-03-31" },
+    { id: "h2", text: "Go to dentist", done: false, priority: 2, date: null },
+    { id: "h3", text: "Sell Jimny", done: false, priority: 4, date: null },
+    { id: "h4", text: "Sell Volvo", done: false, priority: 4, date: null },
+    { id: "h5", text: "Put stuff in storage", done: false, priority: 3, date: null },
+  ]},
+];
+
+const STORAGE_KEY = "andes-todo-v5";
+const CAT_COLORS = ["#D94F00","#0B7A4B","#2563EB","#7C3AED","#DB2777","#EA580C","#0891B2"];
+
+function pipColor(v) {
+  if (v >= 5) return "#D94F00";
+  if (v >= 4) return "#EA580C";
+  if (v >= 3) return "#B8860B";
+  if (v >= 2) return "#6B7280";
+  return "#9CA3AF";
+}
+
+function loadTasks() {
+  try { const s = localStorage.getItem(STORAGE_KEY); if (s) return JSON.parse(s); } catch(e){}
+  return INITIAL_TASKS;
+}
+function persistTasks(t) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(t)); } catch(e){}
+}
+
+function Checkbox({ checked, onClick, size }) {
+  size = size || 20;
+  return e("div", { onClick, style: {
+    width: size, height: size, minWidth: size, borderRadius: 4,
+    border: checked ? "2px solid #2D8B4E" : "2px solid #ccc",
+    background: checked ? "#2D8B4E" : "transparent",
+    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+    marginTop: 1, transition: "all 0.2s ease",
+  }},
+    checked && e("svg", { width: size*0.6, height: size*0.6, viewBox: "0 0 12 12", fill: "none" },
+      e("path", { d: "M2.5 6L5 8.5L9.5 3.5", stroke: "white", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
+    )
+  );
+}
+
+function PriorityPips({ value, onChange }) {
+  return e("div", { style: { display: "flex", gap: 3, alignItems: "center" } },
+    [1,2,3,4,5].map(n => e("div", { key: n, onClick: () => onChange(n), title: "Priority " + n, style: {
+      width: 8, height: 8, borderRadius: "50%", cursor: "pointer",
+      background: n <= value ? pipColor(value) : "#ddd", transition: "background 0.15s ease",
+    }}))
+  );
+}
+
+/* ─── Scatter Plot ─── */
+function ScatterPlot({ tasks, onUpdate, catColors }) {
+  const svgRef = useRef(null);
+  const containerRef = useRef(null);
+  const [dragging, setDragging] = useState(null);
+  const [tooltip, setTooltip] = useState(null);
+  const [dims, setDims] = useState({ w: 560, h: 400 });
+
+  useEffect(() => {
+    const measure = () => {
+      if (containerRef.current) {
+        const r = containerRef.current.getBoundingClientRect();
+        setDims({ w: Math.max(320, r.width), h: Math.max(280, Math.min(420, r.width * 0.7)) });
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
+  const pad = { top: 30, right: 30, bottom: 50, left: 55 };
+  const plotW = dims.w - pad.left - pad.right;
+  const plotH = dims.h - pad.top - pad.bottom;
+
+  const points = [];
+  let ci = 0;
+  for (const cat of tasks) {
+    for (const item of cat.items) {
+      if (item.done) { /* skip */ }
+      else if (item.subtasks && item.subtasks.length > 0) {
+        for (const sub of item.subtasks) {
+          if (sub.done) continue;
+          const p = sub.priority != null ? sub.priority : (item.priority || 3);
+          const d = sub.date || item.date || null;
+          const days = daysUntil(d);
+          let urgency = 0.15;
+          if (days !== null) urgency = Math.max(0, Math.min(1, 1 - days / 90));
+          points.push({ id: sub.id, parentId: item.id, text: sub.text, catIdx: ci, urgency, importance: p / 5, priority: p, date: d, days, color: catColors[ci % catColors.length] });
+        }
+      } else {
+        const days = daysUntil(item.date);
+        let urgency = 0.15;
+        if (days !== null) urgency = Math.max(0, Math.min(1, 1 - days / 90));
+        points.push({ id: item.id, parentId: null, text: item.text, catIdx: ci, urgency, importance: (item.priority || 3) / 5, priority: item.priority || 3, date: item.date, days, color: catColors[ci % catColors.length] });
+      }
+    }
+    ci++;
+  }
+
+  const toSvgX = (imp) => pad.left + imp * plotW;
+  const toSvgY = (urg) => pad.top + (1 - urg) * plotH;
+  const fromSvgX = (sx) => Math.max(0, Math.min(1, (sx - pad.left) / plotW));
+  const fromSvgY = (sy) => Math.max(0, Math.min(1, 1 - (sy - pad.top) / plotH));
+
+  const onPointerDown = (ev, pt) => { ev.preventDefault(); ev.stopPropagation(); setDragging(pt.id); if (svgRef.current) svgRef.current.setPointerCapture(ev.pointerId); };
+  const onPointerMove = (ev) => {
+    if (!dragging || !svgRef.current) return;
+    const r = svgRef.current.getBoundingClientRect();
+    const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+    const newImp = fromSvgX(sx), newUrg = fromSvgY(sy);
+    const newP = Math.max(1, Math.min(5, Math.round(newImp * 5)));
+    const newDays = Math.max(0, Math.round((1 - newUrg) * 90));
+    const nd = new Date(TODAY); nd.setDate(nd.getDate() + newDays);
+    onUpdate(dragging, newP, nd.toISOString().split("T")[0]);
+  };
+  const onPointerUp = () => setDragging(null);
+
+  const quadrants = [
+    { x: pad.left + plotW * 0.75, y: pad.top + plotH * 0.18, label: "DO FIRST", sub: "urgent + important", opacity: 0.6 },
+    { x: pad.left + plotW * 0.25, y: pad.top + plotH * 0.18, label: "SCHEDULE", sub: "urgent, less important", opacity: 0.35 },
+    { x: pad.left + plotW * 0.75, y: pad.top + plotH * 0.82, label: "PLAN", sub: "important, not urgent", opacity: 0.35 },
+    { x: pad.left + plotW * 0.25, y: pad.top + plotH * 0.82, label: "LATER", sub: "neither urgent nor important", opacity: 0.2 },
+  ];
+
+  return e("div", { ref: containerRef, style: { width: "100%", marginBottom: 32 } },
+    e("svg", { ref: svgRef, width: dims.w, height: dims.h, style: { display: "block", cursor: dragging ? "grabbing" : "default", touchAction: "none" }, onPointerMove, onPointerUp, onPointerLeave: onPointerUp },
+      // Background
+      e("rect", { x: pad.left, y: pad.top, width: plotW, height: plotH, fill: "#FAFAF8", stroke: "#e5e5e0", strokeWidth: 1 }),
+      // Dividers
+      e("line", { x1: pad.left + plotW/2, y1: pad.top, x2: pad.left + plotW/2, y2: pad.top + plotH, stroke: "#e5e5e0", strokeDasharray: "4,4" }),
+      e("line", { x1: pad.left, y1: pad.top + plotH/2, x2: pad.left + plotW, y2: pad.top + plotH/2, stroke: "#e5e5e0", strokeDasharray: "4,4" }),
+      // Quadrant labels
+      quadrants.map((q, i) => e("g", { key: i, opacity: q.opacity },
+        e("text", { x: q.x, y: q.y, textAnchor: "middle", fontSize: 11, fontWeight: 600, fill: "#1a1a1a", fontFamily: "IBM Plex Mono, monospace" }, q.label),
+        e("text", { x: q.x, y: q.y + 14, textAnchor: "middle", fontSize: 8, fill: "#999", fontFamily: "IBM Plex Mono, monospace" }, q.sub),
+      )),
+      // Axis labels
+      e("text", { x: pad.left + plotW/2, y: dims.h - 8, textAnchor: "middle", fontSize: 11, fontWeight: 600, fill: "#666", fontFamily: "IBM Plex Mono, monospace" }, "IMPORTANCE \u2192"),
+      e("text", { transform: "translate(14, " + (pad.top + plotH/2) + ") rotate(-90)", textAnchor: "middle", fontSize: 11, fontWeight: 600, fill: "#666", fontFamily: "IBM Plex Mono, monospace" }, "URGENCY \u2192"),
+      // X ticks
+      [1,2,3,4,5].map(n => { const x = toSvgX(n/5); return e("g", { key: "x"+n },
+        e("line", { x1: x, y1: pad.top+plotH, x2: x, y2: pad.top+plotH+5, stroke: "#ccc" }),
+        e("text", { x, y: pad.top+plotH+18, textAnchor: "middle", fontSize: 10, fill: "#999", fontFamily: "IBM Plex Mono, monospace" }, n),
+      ); }),
+      // Y ticks
+      [0,30,60,90].map(d => { const urg = 1 - d/90; const y = toSvgY(urg); return e("g", { key: "y"+d },
+        e("line", { x1: pad.left-5, y1: y, x2: pad.left, y2: y, stroke: "#ccc" }),
+        e("text", { x: pad.left-9, y: y+4, textAnchor: "end", fontSize: 9, fill: "#999", fontFamily: "IBM Plex Mono, monospace" }, d === 0 ? "now" : d+"d"),
+      ); }),
+      // Points
+      points.map(pt => {
+        const cx = toSvgX(pt.importance), cy = toSvgY(pt.urgency);
+        const isDrag = dragging === pt.id, isHov = tooltip === pt.id;
+        const tipW = Math.min(200, Math.max(120, pt.text.length * 6.5 + 20));
+        const flipLeft = cx + 12 + tipW > dims.w - 10;
+        const tx = flipLeft ? cx - tipW - 12 : cx + 12;
+        const textX = flipLeft ? cx - tipW - 4 : cx + 20;
+        return e("g", { key: pt.id },
+          (isDrag || isHov) && e("circle", { cx, cy, r: 14, fill: pt.color, opacity: 0.15 }),
+          e("circle", { cx, cy, r: isDrag ? 8 : 6, fill: pt.color, stroke: "#fff", strokeWidth: 2,
+            style: { cursor: "grab", transition: isDrag ? "none" : "all 0.2s ease" },
+            onPointerDown: (ev) => onPointerDown(ev, pt),
+            onPointerEnter: () => setTooltip(pt.id),
+            onPointerLeave: () => { if (!dragging) setTooltip(null); },
+          }),
+          (isHov || isDrag) && e("g", null,
+            e("rect", { x: tx, y: cy - 28, width: tipW, height: 38, rx: 4, fill: "#1a1a1a", opacity: 0.92 }),
+            e("text", { x: textX, y: cy - 14, fontSize: 10, fontWeight: 600, fill: "#fff", fontFamily: "IBM Plex Mono, monospace" }, pt.text.length > 28 ? pt.text.slice(0,28) + "\u2026" : pt.text),
+            e("text", { x: textX, y: cy - 2, fontSize: 9, fill: "#aaa", fontFamily: "IBM Plex Mono, monospace" }, "P" + pt.priority + " \u00b7 " + (pt.date ? formatDate(pt.date) : "no date")),
+          ),
+        );
+      }),
+    ),
+    // Legend
+    e("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px 16px", paddingLeft: pad.left, marginTop: 4 } },
+      tasks.map((cat, i) => {
+        if (!cat.items.some(it => !it.done)) return null;
+        return e("div", { key: i, style: { display: "flex", alignItems: "center", gap: 5 } },
+          e("div", { style: { width: 8, height: 8, borderRadius: "50%", background: catColors[i % catColors.length] } }),
+          e("span", { style: { fontSize: 9, color: "#888", fontFamily: "IBM Plex Mono, monospace", letterSpacing: "0.3px" } }, cat.category),
+        );
+      })
+    ),
+  );
+}
+
+/* ─── Main App ─── */
+function App() {
+  const [tasks, setTasks] = useState(loadTasks);
+  const [newTask, setNewTask] = useState("");
+  const [newCategory, setNewCategory] = useState(0);
+  const [newPriority, setNewPriority] = useState(3);
+  const [showAdd, setShowAdd] = useState(false);
+  const [expanded, setExpanded] = useState({});
+  const [view, setView] = useState("list");
+
+  const saveTasks = useCallback((updated) => { setTasks(updated); persistTasks(updated); }, []);
+
+  const toggleTask = (catIdx, itemId) => {
+    saveTasks(tasks.map((cat, ci) => ci === catIdx ? { ...cat, items: cat.items.map(it => it.id === itemId ? { ...it, done: !it.done } : it) } : cat));
+  };
+  const toggleSubtask = (catIdx, itemId, subId) => {
+    saveTasks(tasks.map((cat, ci) => ci === catIdx ? { ...cat, items: cat.items.map(it => it.id === itemId ? { ...it, subtasks: (it.subtasks||[]).map(s => s.id === subId ? { ...s, done: !s.done } : s) } : it) } : cat));
+  };
+  const updateItemField = (itemId, field, value) => {
+    saveTasks(tasks.map(cat => ({ ...cat, items: cat.items.map(item => {
+      if (item.id === itemId) return { ...item, [field]: value };
+      if (item.subtasks && item.subtasks.some(s => s.id === itemId)) return { ...item, subtasks: item.subtasks.map(s => s.id === itemId ? { ...s, [field]: value } : s) };
+      return item;
+    }) })));
+  };
+  const updateFromPlot = (pointId, newP, newDate) => {
+    saveTasks(tasks.map(cat => ({ ...cat, items: cat.items.map(item => {
+      if (item.id === pointId) return { ...item, priority: newP, date: newDate };
+      if (item.subtasks && item.subtasks.some(s => s.id === pointId)) return { ...item, subtasks: item.subtasks.map(s => s.id === pointId ? { ...s, priority: newP, date: newDate } : s) };
+      return item;
+    }) })));
+  };
+  const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  const addTask = () => {
+    if (!newTask.trim()) return;
+    saveTasks(tasks.map((cat, ci) => ci === newCategory ? { ...cat, items: [...cat.items, { id: "c-" + Date.now(), text: newTask.trim(), done: false, priority: newPriority, date: null }] } : cat));
+    setNewTask(""); setShowAdd(false);
+  };
+  const removeTask = (catIdx, itemId) => {
+    saveTasks(tasks.map((cat, ci) => ci === catIdx ? { ...cat, items: cat.items.filter(it => it.id !== itemId) } : cat));
+  };
+
+  const countAll = (t) => { let total = 0, done = 0; for (const c of t) for (const i of c.items) { total++; if (i.done) done++; if (i.subtasks) for (const s of i.subtasks) { total++; if (s.done) done++; } } return { total, done }; };
+  const { total: totalTasks, done: doneTasks } = countAll(tasks);
+  const pct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+  return e("div", { style: { fontFamily: "'IBM Plex Mono', monospace", maxWidth: 660, margin: "0 auto", padding: "32px 20px 60px", color: "#1a1a1a", background: "#FAFAF8", minHeight: "100vh" } },
+
+    // Header
+    e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32 } },
+      e("div", null,
+        e("div", { style: { fontFamily: "'DM Serif Display', serif", fontSize: 32, letterSpacing: "-0.5px", marginBottom: 4 } }, "Andes Expedition"),
+        e("div", { style: { fontSize: 12, color: "#999", letterSpacing: "0.5px" } }, "PREP & PLANNING CHECKLIST"),
+      ),
+      e("div", { style: { display: "flex", background: "#fff", border: "1px solid #e5e5e0", borderRadius: 6, overflow: "hidden", marginTop: 6 } },
+        ["list", "plot"].map(v => e("div", { key: v, onClick: () => setView(v), style: {
+          padding: "6px 14px", fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.5px", fontFamily: "'IBM Plex Mono', monospace",
+          background: view === v ? "#1a1a1a" : "transparent", color: view === v ? "#fff" : "#999", transition: "all 0.2s ease",
+        } }, v === "list" ? "LIST" : "MATRIX"))
+      ),
+    ),
+
+    // Progress
+    e("div", { style: { marginBottom: 32, padding: "16px 20px", background: "#fff", border: "1px solid #e5e5e0", borderRadius: 6 } },
+      e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 } },
+        e("span", { style: { fontSize: 12, fontWeight: 600, letterSpacing: "0.5px", color: "#666" } }, "PROGRESS"),
+        e("span", { style: { fontSize: 24, fontWeight: 600 } }, pct + "% ", e("span", { style: { fontSize: 12, fontWeight: 400, color: "#999" } }, "(" + doneTasks + "/" + totalTasks + ")")),
+      ),
+      e("div", { style: { height: 6, background: "#EDEDE8", borderRadius: 3, overflow: "hidden" } },
+        e("div", { style: { height: "100%", width: pct + "%", borderRadius: 3, transition: "width 0.4s ease", background: pct === 100 ? "#2D8B4E" : "#D94F00" } }),
+      ),
+    ),
+
+    // Matrix
+    view === "plot" && e(ScatterPlot, { tasks, onUpdate: updateFromPlot, catColors: CAT_COLORS }),
+
+    // List
+    view === "list" && e("div", null,
+      tasks.map((cat, catIdx) => {
+        let catTotal = 0, catDone = 0;
+        for (const item of cat.items) { catTotal++; if (item.done) catDone++; if (item.subtasks) for (const s of item.subtasks) { catTotal++; if (s.done) catDone++; } }
+        return e("div", { key: cat.category, style: { marginBottom: 28 } },
+          // Category header
+          e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, paddingBottom: 6, borderBottom: "2px solid #1a1a1a" } },
+            e("span", { style: { fontSize: 13, fontWeight: 600, letterSpacing: "1px" } }, cat.icon + " " + cat.category),
+            e("span", { style: { fontSize: 11, color: "#999" } }, catDone + "/" + catTotal),
+          ),
+          // Items
+          cat.items.map(item => {
+            const hasSubs = item.subtasks && item.subtasks.length > 0;
+            const isExp = expanded[item.id] !== false;
+            const subsDone = hasSubs ? item.subtasks.filter(s => s.done).length : 0;
+            const subsTotal = hasSubs ? item.subtasks.length : 0;
+            const days = daysUntil(item.date);
+            const isOverdue = days !== null && days < 0;
+            const isSoon = days !== null && days >= 0 && days <= 7;
+
+            return e("div", { key: item.id },
+              // Main row
+              e("div", { style: { display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", marginBottom: 2, borderRadius: 4, background: item.done ? "transparent" : "rgba(0,0,0,0.015)", opacity: item.done ? 0.4 : 1, transition: "opacity 0.3s ease" } },
+                e(Checkbox, { checked: item.done, onClick: () => toggleTask(catIdx, item.id) }),
+                e("div", { style: { flex: 1, minWidth: 0 } },
+                  e("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
+                    hasSubs && e("span", { onClick: () => toggleExpand(item.id), style: { cursor: "pointer", fontSize: 10, color: "#999", userSelect: "none" } }, isExp ? "\u25bc" : "\u25b6"),
+                    e("span", { style: { fontSize: 14, textDecoration: item.done ? "line-through" : "none", color: item.done ? "#999" : "#1a1a1a" } }, item.text),
+                    hasSubs && e("span", { style: { fontSize: 10, color: "#999" } }, "(" + subsDone + "/" + subsTotal + ")"),
+                  ),
+                  !item.done && e("div", { style: { display: "flex", alignItems: "center", gap: 12, marginTop: 6 } },
+                    e(PriorityPips, { value: item.priority || 3, onChange: (v) => updateItemField(item.id, "priority", v) }),
+                    e("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
+                      e("input", { type: "date", value: item.date || "", onChange: (ev) => updateItemField(item.id, "date", ev.target.value || null), style: { fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", border: "none", background: "transparent", color: isOverdue ? "#DC2626" : isSoon ? "#D94F00" : "#999", padding: 0, outline: "none", width: 105, cursor: "pointer" } }),
+                      item.date && e("span", { style: { fontSize: 9, fontWeight: 600, letterSpacing: "0.3px", color: isOverdue ? "#DC2626" : isSoon ? "#D94F00" : "#999" } }, isOverdue ? Math.abs(days) + "d overdue" : days === 0 ? "today" : days + "d"),
+                    ),
+                  ),
+                ),
+                e("div", { onClick: () => removeTask(catIdx, item.id), style: { fontSize: 14, color: "#ccc", cursor: "pointer", lineHeight: 1, padding: "0 2px" }, title: "Remove" }, "\u00d7"),
+              ),
+              // Subtasks
+              hasSubs && isExp && e("div", { style: { marginLeft: 44, marginBottom: 6 } },
+                item.subtasks.map(sub => {
+                  const sd = daysUntil(sub.date);
+                  const so = sd !== null && sd < 0;
+                  const ss = sd !== null && sd >= 0 && sd <= 7;
+                  return e("div", { key: sub.id, style: { display: "flex", alignItems: "flex-start", gap: 10, padding: "6px 8px", opacity: sub.done ? 0.4 : 0.85, transition: "opacity 0.3s ease" } },
+                    e(Checkbox, { checked: sub.done, onClick: () => toggleSubtask(catIdx, item.id, sub.id), size: 16 }),
+                    e("div", { style: { flex: 1, minWidth: 0 } },
+                      e("span", { style: { fontSize: 12, color: sub.done ? "#999" : "#555", textDecoration: sub.done ? "line-through" : "none" } }, sub.text),
+                      !sub.done && e("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 4 } },
+                        e(PriorityPips, { value: sub.priority != null ? sub.priority : (item.priority || 3), onChange: (v) => updateItemField(sub.id, "priority", v) }),
+                        e("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
+                          e("input", { type: "date", value: sub.date || "", onChange: (ev) => updateItemField(sub.id, "date", ev.target.value || null), style: { fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", border: "none", background: "transparent", color: so ? "#DC2626" : ss ? "#D94F00" : "#999", padding: 0, outline: "none", width: 100, cursor: "pointer" } }),
+                          sub.date && e("span", { style: { fontSize: 8, fontWeight: 600, color: so ? "#DC2626" : ss ? "#D94F00" : "#999" } }, so ? Math.abs(sd) + "d over" : sd === 0 ? "today" : sd + "d"),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            );
+          }),
+        );
+      }),
+
+      // Add task
+      !showAdd
+        ? e("div", { onClick: () => setShowAdd(true), style: { padding: "12px 0", textAlign: "center", fontSize: 13, color: "#999", cursor: "pointer", borderTop: "1px dashed #ddd", marginTop: 12 } }, "+ Add task")
+        : e("div", { style: { padding: 16, background: "#fff", border: "1px solid #e5e5e0", borderRadius: 6, marginTop: 12 } },
+            e("input", { type: "text", value: newTask, onChange: (ev) => setNewTask(ev.target.value), onKeyDown: (ev) => { if (ev.key === "Enter") addTask(); }, placeholder: "What needs doing?", autoFocus: true, style: { width: "100%", padding: "8px 0", border: "none", borderBottom: "1px solid #e5e5e0", outline: "none", fontSize: 14, fontFamily: "'IBM Plex Mono', monospace", background: "transparent", marginBottom: 12, boxSizing: "border-box" } }),
+            e("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" } },
+              e("select", { value: newCategory, onChange: (ev) => setNewCategory(Number(ev.target.value)), style: { fontSize: 11, padding: "4px 8px", border: "1px solid #ddd", borderRadius: 4, fontFamily: "'IBM Plex Mono', monospace", background: "#fff" } },
+                tasks.map((cat, i) => e("option", { key: i, value: i }, cat.category))
+              ),
+              e("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
+                e("span", { style: { fontSize: 10, color: "#999" } }, "Priority:"),
+                e(PriorityPips, { value: newPriority, onChange: setNewPriority }),
+              ),
+              e("div", { style: { flex: 1 } }),
+              e("span", { onClick: () => setShowAdd(false), style: { fontSize: 12, color: "#999", cursor: "pointer" } }, "cancel"),
+              e("span", { onClick: addTask, style: { fontSize: 12, fontWeight: 600, color: "#D94F00", cursor: "pointer" } }, "add \u2192"),
+            ),
+          ),
+    ),
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(e(App));
+</script>
+</body>
+</html>
