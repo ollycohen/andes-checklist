@@ -129,14 +129,14 @@
         {
           "id": "m1",
           "text": "Deborah cookies",
-          "done": false,
+          "done": true,
           "priority": 2,
           "date": null
         },
         {
           "id": "m2",
           "text": "Snowpit test",
-          "done": false,
+          "done": true,
           "priority": 2,
           "date": null
         },
@@ -228,5 +228,5 @@
       ]
     }
   ],
-  "updatedAt": "2026-03-23T21:43:11.980Z"
+  "updatedAt": "2026-03-23T21:43:21.998Z"
 }
