@@ -69,10 +69,14 @@ const INITIAL_TASKS = [
 ];
 
 const STORAGE_KEY = "andes-todo-v5";
-const GITHUB_TOKEN_KEY = "andes-github-token";
 const GITHUB_REPO = "ollycohen/andes-checklist";
 const GITHUB_DATA_PATH = "data.json";
 const CAT_COLORS = ["#D94F00","#0B7A4B","#2563EB","#7C3AED","#DB2777","#EA580C","#0891B2"];
+
+// Token injected at build time by GitHub Actions from repository secret.
+// In source this is a placeholder; the deploy workflow replaces it.
+const SYNC_TOKEN = "__SYNC_TOKEN__";
+const SYNC_ENABLED = SYNC_TOKEN.length > 0 && SYNC_TOKEN.indexOf("__") !== 0;
 
 function pipColor(v) {
   if (v >= 5) return "#D94F00";
@@ -91,21 +95,13 @@ function persistTasks(t) {
 }
 
 /* ─── GitHub Sync ─── */
-function getGitHubToken() {
-  try { return localStorage.getItem(GITHUB_TOKEN_KEY) || ""; } catch(e) { return ""; }
-}
-function setGitHubToken(token) {
-  try { localStorage.setItem(GITHUB_TOKEN_KEY, token); } catch(e) {}
-}
-
 let _fileSha = null;
 
 async function fetchRemoteTasks() {
-  const token = getGitHubToken();
-  if (!token) return null;
+  if (!SYNC_ENABLED) return null;
   try {
     const resp = await fetch("https://api.github.com/repos/" + GITHUB_REPO + "/contents/" + GITHUB_DATA_PATH, {
-      headers: { "Authorization": "Bearer " + token, "Accept": "application/vnd.github.v3+json" },
+      headers: { "Authorization": "Bearer " + SYNC_TOKEN, "Accept": "application/vnd.github.v3+json" },
     });
     if (resp.status === 404) { _fileSha = null; return null; }
     if (!resp.ok) throw new Error("GitHub fetch failed: " + resp.status);
@@ -117,21 +113,19 @@ async function fetchRemoteTasks() {
 }
 
 async function pushRemoteTasks(tasks) {
-  const token = getGitHubToken();
-  if (!token) return { ok: false, error: "No token" };
+  if (!SYNC_ENABLED) return { ok: false, error: "No token" };
   try {
     const payload = { tasks, updatedAt: new Date().toISOString() };
     const body = { message: "sync: update checklist", content: btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2)))), };
     if (_fileSha) body.sha = _fileSha;
     const resp = await fetch("https://api.github.com/repos/" + GITHUB_REPO + "/contents/" + GITHUB_DATA_PATH, {
       method: "PUT",
-      headers: { "Authorization": "Bearer " + token, "Accept": "application/vnd.github.v3+json", "Content-Type": "application/json" },
+      headers: { "Authorization": "Bearer " + SYNC_TOKEN, "Accept": "application/vnd.github.v3+json", "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
       if (resp.status === 409) {
-        // SHA conflict — re-fetch and retry once
         const remote = await fetchRemoteTasks();
         if (remote) return { ok: false, error: "conflict", remoteTasks: remote };
       }
@@ -143,7 +137,6 @@ async function pushRemoteTasks(tasks) {
   } catch(err) { console.error("Sync push error:", err); return { ok: false, error: err.message }; }
 }
 
-// Debounce helper
 function createDebounce(fn, ms) {
   let timer = null;
   return function() {
@@ -314,40 +307,19 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
 }
 
 /* ─── Sync Status Indicator ─── */
-function SyncBadge({ status, onClick }) {
-  const colors = { idle: "#999", syncing: "#2563EB", synced: "#2D8B4E", error: "#DC2626", offline: "#999" };
-  const labels = { idle: "SYNC", syncing: "SYNCING\u2026", synced: "SYNCED", error: "SYNC ERR", offline: "LOCAL ONLY" };
+function SyncBadge({ status }) {
+  const colors = { syncing: "#2563EB", synced: "#2D8B4E", error: "#DC2626" };
+  const labels = { syncing: "SYNCING\u2026", synced: "SYNCED", error: "SYNC ERR" };
   const color = colors[status] || "#999";
-  return e("div", { onClick, title: status === "offline" ? "Add GitHub token to enable sync" : status === "error" ? "Sync error \u2014 click to retry" : "Sync status", style: {
+  if (!SYNC_ENABLED) return null;
+  return e("div", { title: status === "error" ? "Sync error \u2014 will retry on next change" : "Sync status", style: {
     display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 4,
-    border: "1px solid " + color + "44", cursor: "pointer", fontSize: 10, fontWeight: 600,
+    border: "1px solid " + color + "44", fontSize: 10, fontWeight: 600,
     letterSpacing: "0.5px", color, fontFamily: "'IBM Plex Mono', monospace", transition: "all 0.2s ease",
   }},
     e("div", { style: { width: 6, height: 6, borderRadius: "50%", background: color,
       animation: status === "syncing" ? "pulse 1s infinite" : "none" } }),
     labels[status] || "SYNC",
-  );
-}
-
-/* ─── Settings Panel ─── */
-function SyncSettings({ onClose, onSave, initialToken }) {
-  const [token, setToken] = useState(initialToken);
-  return e("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 } },
-    e("div", { style: { background: "#fff", borderRadius: 8, padding: 24, width: 400, maxWidth: "90vw", boxShadow: "0 8px 32px rgba(0,0,0,0.15)" } },
-      e("div", { style: { fontWeight: 600, fontSize: 14, marginBottom: 4 } }, "GitHub Sync"),
-      e("div", { style: { fontSize: 11, color: "#666", marginBottom: 16, lineHeight: 1.5 } },
-        "Enter a GitHub Personal Access Token with ", e("code", { style: { background: "#f3f3f0", padding: "1px 4px", borderRadius: 3, fontSize: 10 } }, "repo"),
-        " scope to sync your checklist across devices. Your token is stored only in this browser's localStorage."
-      ),
-      e("input", { type: "password", value: token, onChange: (ev) => setToken(ev.target.value), placeholder: "ghp_xxxxxxxxxxxx",
-        style: { width: "100%", padding: "8px 10px", border: "1px solid #ddd", borderRadius: 4, fontSize: 12,
-          fontFamily: "'IBM Plex Mono', monospace", outline: "none", marginBottom: 16, boxSizing: "border-box" } }),
-      e("div", { style: { display: "flex", justifyContent: "flex-end", gap: 12 } },
-        token && e("span", { onClick: () => { setToken(""); onSave(""); }, style: { fontSize: 11, color: "#DC2626", cursor: "pointer", padding: "6px 0", marginRight: "auto" } }, "disconnect"),
-        e("span", { onClick: onClose, style: { fontSize: 12, color: "#999", cursor: "pointer", padding: "6px 12px" } }, "cancel"),
-        e("span", { onClick: () => onSave(token), style: { fontSize: 12, fontWeight: 600, color: "#D94F00", cursor: "pointer", padding: "6px 12px" } }, "save \u2192"),
-      ),
-    ),
   );
 }
 
@@ -360,20 +332,18 @@ function App() {
   const [showAdd, setShowAdd] = useState(false);
   const [expanded, setExpanded] = useState({});
   const [view, setView] = useState("list");
-  const [syncStatus, setSyncStatus] = useState(getGitHubToken() ? "idle" : "offline");
-  const [showSettings, setShowSettings] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(SYNC_ENABLED ? "syncing" : "idle");
 
   // Debounced remote push
   const debouncedPush = useRef(null);
   if (!debouncedPush.current) {
     debouncedPush.current = createDebounce(async (tasksToSync) => {
-      if (!getGitHubToken()) return;
+      if (!SYNC_ENABLED) return;
       setSyncStatus("syncing");
       const result = await pushRemoteTasks(tasksToSync);
       if (result.ok) {
         setSyncStatus("synced");
       } else if (result.error === "conflict" && result.remoteTasks) {
-        // Remote is newer — adopt remote state
         setTasks(result.remoteTasks);
         persistTasks(result.remoteTasks);
         setSyncStatus("synced");
@@ -385,7 +355,7 @@ function App() {
 
   // Fetch remote on mount
   useEffect(() => {
-    if (!getGitHubToken()) return;
+    if (!SYNC_ENABLED) return;
     setSyncStatus("syncing");
     fetchRemoteTasks().then(remote => {
       if (remote) {
@@ -402,7 +372,7 @@ function App() {
   const saveTasks = useCallback((updated) => {
     setTasks(updated);
     persistTasks(updated);
-    if (getGitHubToken()) {
+    if (SYNC_ENABLED) {
       setSyncStatus("syncing");
       debouncedPush.current(updated);
     }
@@ -442,37 +412,10 @@ function App() {
   const { total: totalTasks, done: doneTasks } = countAll(tasks);
   const pct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
-  const handleSaveToken = (token) => {
-    setGitHubToken(token);
-    setShowSettings(false);
-    if (token) {
-      setSyncStatus("syncing");
-      fetchRemoteTasks().then(remote => {
-        if (remote) { setTasks(remote); persistTasks(remote); setSyncStatus("synced"); }
-        else { debouncedPush.current(tasks); }
-      }).catch(() => setSyncStatus("error"));
-    } else {
-      setSyncStatus("offline");
-    }
-  };
-
-  const handleSyncClick = () => {
-    if (syncStatus === "offline") { setShowSettings(true); return; }
-    if (syncStatus === "error") {
-      setSyncStatus("syncing");
-      debouncedPush.current(tasks);
-      return;
-    }
-    setShowSettings(true);
-  };
-
   return e("div", { style: { fontFamily: "'IBM Plex Mono', monospace", maxWidth: 660, margin: "0 auto", padding: "32px 20px 60px", color: "#1a1a1a", background: "#FAFAF8", minHeight: "100vh" } },
 
-    // Settings modal
-    showSettings && e(SyncSettings, { onClose: () => setShowSettings(false), onSave: handleSaveToken, initialToken: getGitHubToken() }),
-
     // Pulse animation for sync indicator
-    e("style", null, "@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }"),
+    SYNC_ENABLED && e("style", null, "@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }"),
 
     // Header
     e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32 } },
@@ -487,7 +430,7 @@ function App() {
             background: view === v ? "#1a1a1a" : "transparent", color: view === v ? "#fff" : "#999", transition: "all 0.2s ease",
           } }, v === "list" ? "LIST" : "MATRIX"))
         ),
-        e(SyncBadge, { status: syncStatus, onClick: handleSyncClick }),
+        e(SyncBadge, { status: syncStatus }),
       ),
     ),
 
