@@ -9,6 +9,13 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #FAFAF8; font-family: 'IBM Plex Mono', monospace; color: #1a1a1a; -webkit-font-smoothing: antialiased; }
+  .task-row .del-btn { opacity: 0; transition: opacity 0.15s ease; }
+  .task-row:hover .del-btn, .task-row:focus-within .del-btn { opacity: 1; }
+  .del-btn:hover { color: #DC2626 !important; }
+  .task-input { background: transparent; border: none; outline: none; font-family: 'IBM Plex Mono', monospace; width: 100%; padding: 0; cursor: text; }
+  .task-input::placeholder { color: #ccc; }
+  .add-task-row { opacity: 0; transition: opacity 0.2s ease; cursor: text; }
+  .category-block:hover .add-task-row { opacity: 1; }
 </style>
 </head>
 <body>
@@ -196,7 +203,6 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
   const plotW = dims.w - pad.left - pad.right;
   const plotH = dims.h - pad.top - pad.bottom;
 
-  // Collect raw points first, then space out undated ones to prevent overlap
   const rawPoints = [];
   let ci = 0;
   for (const cat of tasks) {
@@ -222,7 +228,6 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
     ci++;
   }
 
-  // Space undated points evenly across urgency 0.05–0.45, staggered by priority
   const undated = rawPoints.filter(p => !p.hasDate);
   const byPriority = {};
   undated.forEach(p => { (byPriority[p.priority] = byPriority[p.priority] || []).push(p); });
@@ -230,7 +235,6 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
     const n = group.length;
     group.forEach((p, i) => {
       p.urgency = n === 1 ? 0.22 : 0.05 + (i / (n - 1)) * 0.40;
-      // Small x offset per category so same-priority items from different categories don't overlap
       p.importance = Math.max(0.05, Math.min(0.98, p.importance + (p.catIdx - 3) * 0.015));
     });
   });
@@ -264,30 +268,23 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
 
   return e("div", { ref: containerRef, style: { width: "100%", marginBottom: 32 } },
     e("svg", { ref: svgRef, width: dims.w, height: dims.h, style: { display: "block", cursor: dragging ? "grabbing" : "default", touchAction: "none" }, onPointerMove, onPointerUp, onPointerLeave: onPointerUp },
-      // Background
       e("rect", { x: pad.left, y: pad.top, width: plotW, height: plotH, fill: "#FAFAF8", stroke: "#e5e5e0", strokeWidth: 1 }),
-      // Dividers
       e("line", { x1: pad.left + plotW/2, y1: pad.top, x2: pad.left + plotW/2, y2: pad.top + plotH, stroke: "#e5e5e0", strokeDasharray: "4,4" }),
       e("line", { x1: pad.left, y1: pad.top + plotH/2, x2: pad.left + plotW, y2: pad.top + plotH/2, stroke: "#e5e5e0", strokeDasharray: "4,4" }),
-      // Quadrant labels
       quadrants.map((q, i) => e("g", { key: i, opacity: q.opacity },
         e("text", { x: q.x, y: q.y, textAnchor: "middle", fontSize: 11, fontWeight: 600, fill: "#1a1a1a", fontFamily: "IBM Plex Mono, monospace" }, q.label),
         e("text", { x: q.x, y: q.y + 14, textAnchor: "middle", fontSize: 8, fill: "#999", fontFamily: "IBM Plex Mono, monospace" }, q.sub),
       )),
-      // Axis labels
       e("text", { x: pad.left + plotW/2, y: dims.h - 8, textAnchor: "middle", fontSize: 11, fontWeight: 600, fill: "#666", fontFamily: "IBM Plex Mono, monospace" }, "IMPORTANCE \u2192"),
       e("text", { transform: "translate(14, " + (pad.top + plotH/2) + ") rotate(-90)", textAnchor: "middle", fontSize: 11, fontWeight: 600, fill: "#666", fontFamily: "IBM Plex Mono, monospace" }, "URGENCY \u2192"),
-      // X ticks
       [1,2,3,4,5].map(n => { const x = toSvgX(n/5); return e("g", { key: "x"+n },
         e("line", { x1: x, y1: pad.top+plotH, x2: x, y2: pad.top+plotH+5, stroke: "#ccc" }),
         e("text", { x, y: pad.top+plotH+18, textAnchor: "middle", fontSize: 10, fill: "#999", fontFamily: "IBM Plex Mono, monospace" }, n),
       ); }),
-      // Y ticks
       [0,30,60,90].map(d => { const urg = 1 - d/90; const y = toSvgY(urg); return e("g", { key: "y"+d },
         e("line", { x1: pad.left-5, y1: y, x2: pad.left, y2: y, stroke: "#ccc" }),
         e("text", { x: pad.left-9, y: y+4, textAnchor: "end", fontSize: 9, fill: "#999", fontFamily: "IBM Plex Mono, monospace" }, d === 0 ? "now" : d+"d"),
       ); }),
-      // Points — filled for dated, hollow ring for undated
       points.map(pt => {
         const cx = toSvgX(pt.importance), cy = toSvgY(pt.urgency);
         const isDrag = dragging === pt.id, isHov = tooltip === pt.id;
@@ -318,7 +315,6 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
         );
       }),
     ),
-    // Legend
     e("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px 16px", paddingLeft: pad.left, marginTop: 4 } },
       tasks.map((cat, i) => {
         if (!cat.items.some(it => !it.done)) return null;
@@ -361,13 +357,12 @@ function SyncBadge({ status }) {
 /* ─── Main App ─── */
 function App() {
   const [tasks, setTasks] = useState(loadTasks);
-  const [newTask, setNewTask] = useState("");
-  const [newCategory, setNewCategory] = useState(0);
-  const [newPriority, setNewPriority] = useState(3);
-  const [showAdd, setShowAdd] = useState(false);
   const [expanded, setExpanded] = useState({});
   const [view, setView] = useState("list");
   const [syncStatus, setSyncStatus] = useState(SYNC_ENABLED ? "syncing" : "idle");
+  const [editingId, setEditingId] = useState(null);
+  const inputRefs = useRef({});
+  const suppressNextBlur = useRef(false);
 
   // Debounced remote push
   const debouncedPush = useRef(null);
@@ -398,7 +393,6 @@ function App() {
         persistTasks(remote);
         setSyncStatus("synced");
       } else {
-        // No remote file yet — push current state
         debouncedPush.current(loadTasks());
       }
     }).catch(() => setSyncStatus("error"));
@@ -408,10 +402,16 @@ function App() {
     setTasks(updated);
     persistTasks(updated);
     if (SYNC_ENABLED) {
-      setSyncStatus("syncing");
       debouncedPush.current(updated);
     }
   }, []);
+
+  const focusItem = (id) => {
+    setTimeout(() => {
+      const el = inputRefs.current[id];
+      if (el) { el.focus(); el.selectionStart = el.selectionEnd = el.value.length; }
+    }, 0);
+  };
 
   const toggleTask = (catIdx, itemId) => {
     saveTasks(tasks.map((cat, ci) => ci === catIdx ? { ...cat, items: cat.items.map(it => it.id === itemId ? { ...it, done: !it.done } : it) } : cat));
@@ -434,13 +434,48 @@ function App() {
     }) })));
   };
   const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
-  const addTask = () => {
-    if (!newTask.trim()) return;
-    saveTasks(tasks.map((cat, ci) => ci === newCategory ? { ...cat, items: [...cat.items, { id: "c-" + Date.now(), text: newTask.trim(), done: false, priority: newPriority, date: null }] } : cat));
-    setNewTask(""); setShowAdd(false);
-  };
   const removeTask = (catIdx, itemId) => {
     saveTasks(tasks.map((cat, ci) => ci === catIdx ? { ...cat, items: cat.items.filter(it => it.id !== itemId) } : cat));
+  };
+
+  const updateTaskText = (itemId, text) => {
+    saveTasks(tasks.map(cat => ({ ...cat, items: cat.items.map(item => item.id === itemId ? { ...item, text } : item) })));
+  };
+
+  const addTaskAfter = (catIdx, afterItemId) => {
+    const newId = "c-" + Date.now();
+    suppressNextBlur.current = true;
+    const updated = tasks.map((cat, ci) => {
+      if (ci !== catIdx) return cat;
+      const items = [...cat.items];
+      const idx = items.findIndex(it => it.id === afterItemId);
+      items.splice(idx + 1, 0, { id: newId, text: "", done: false, priority: 3, date: null });
+      return { ...cat, items };
+    });
+    saveTasks(updated);
+    setEditingId(newId);
+    focusItem(newId);
+  };
+
+  const addTaskAtEnd = (catIdx) => {
+    const newId = "c-" + Date.now();
+    const updated = tasks.map((cat, ci) => {
+      if (ci !== catIdx) return cat;
+      return { ...cat, items: [...cat.items, { id: newId, text: "", done: false, priority: 3, date: null }] };
+    });
+    saveTasks(updated);
+    setEditingId(newId);
+    focusItem(newId);
+  };
+
+  const deleteTaskFocusPrev = (catIdx, itemId) => {
+    const items = tasks[catIdx].items;
+    const idx = items.findIndex(it => it.id === itemId);
+    const prev = idx > 0 ? items[idx - 1] : null;
+    suppressNextBlur.current = true;
+    saveTasks(tasks.map((cat, ci) => ci === catIdx ? { ...cat, items: cat.items.filter(it => it.id !== itemId) } : cat));
+    setEditingId(prev ? prev.id : null);
+    if (prev) focusItem(prev.id);
   };
 
   const countAll = (t) => { let total = 0, done = 0; for (const c of t) for (const i of c.items) { total++; if (i.done) done++; if (i.subtasks) for (const s of i.subtasks) { total++; if (s.done) done++; } } return { total, done }; };
@@ -449,7 +484,6 @@ function App() {
 
   return e("div", { style: { fontFamily: "'IBM Plex Mono', monospace", maxWidth: 660, margin: "0 auto", padding: "32px 20px 60px", color: "#1a1a1a", background: "#FAFAF8", minHeight: "100vh" } },
 
-    // Pulse animation for sync indicator
     SYNC_ENABLED && e("style", null, "@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }"),
 
     // Header
@@ -488,14 +522,19 @@ function App() {
       tasks.map((cat, catIdx) => {
         let catTotal = 0, catDone = 0;
         for (const item of cat.items) { catTotal++; if (item.done) catDone++; if (item.subtasks) for (const s of item.subtasks) { catTotal++; if (s.done) catDone++; } }
-        return e("div", { key: cat.category, style: { marginBottom: 28 } },
+
+        // Sort: undone items first (stable), done items to bottom
+        const sortedItems = [...cat.items].sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0));
+
+        return e("div", { key: cat.category, className: "category-block", style: { marginBottom: 28 } },
           // Category header
           e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, paddingBottom: 6, borderBottom: "2px solid #1a1a1a" } },
             e("span", { style: { fontSize: 13, fontWeight: 600, letterSpacing: "1px" } }, cat.icon + " " + cat.category),
             e("span", { style: { fontSize: 11, color: "#999" } }, catDone + "/" + catTotal),
           ),
+
           // Items
-          cat.items.map(item => {
+          sortedItems.map(item => {
             const hasSubs = item.subtasks && item.subtasks.length > 0;
             const isExp = expanded[item.id] !== false;
             const subsDone = hasSubs ? item.subtasks.filter(s => s.done).length : 0;
@@ -503,16 +542,59 @@ function App() {
             const days = daysUntil(item.date);
             const isOverdue = days !== null && days < 0;
             const isSoon = days !== null && days >= 0 && days <= 7;
+            const isEditing = editingId === item.id;
 
             return e("div", { key: item.id },
-              // Main row
-              e("div", { style: { display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", marginBottom: 2, borderRadius: 4, background: item.done ? "transparent" : "rgba(0,0,0,0.015)", opacity: item.done ? 0.4 : 1, transition: "opacity 0.3s ease" } },
+              e("div", { className: "task-row", style: {
+                display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 12px", marginBottom: 1,
+                borderRadius: 4,
+                background: isEditing ? "rgba(37,99,235,0.04)" : item.done ? "transparent" : "rgba(0,0,0,0.015)",
+                opacity: item.done ? 0.5 : 1,
+                transition: "opacity 0.3s ease, background 0.15s ease",
+              }},
                 e(Checkbox, { checked: item.done, onClick: () => toggleTask(catIdx, item.id) }),
                 e("div", { style: { flex: 1, minWidth: 0 } },
-                  e("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
-                    hasSubs && e("span", { onClick: () => toggleExpand(item.id), style: { cursor: "pointer", fontSize: 10, color: "#999", userSelect: "none" } }, isExp ? "\u25bc" : "\u25b6"),
-                    e("span", { style: { fontSize: 14, textDecoration: item.done ? "line-through" : "none", color: item.done ? "#999" : "#1a1a1a" } }, item.text),
-                    hasSubs && e("span", { style: { fontSize: 10, color: "#999" } }, "(" + subsDone + "/" + subsTotal + ")"),
+                  e("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                    hasSubs && e("span", { onClick: () => toggleExpand(item.id), style: { cursor: "pointer", fontSize: 10, color: "#999", userSelect: "none", flexShrink: 0 } }, isExp ? "\u25bc" : "\u25b6"),
+                    e("input", {
+                      className: "task-input",
+                      ref: (el) => {
+                        if (el) inputRefs.current[item.id] = el;
+                        if (el && isEditing && document.activeElement !== el) {
+                          // Focus will be set imperatively via focusItem
+                        }
+                      },
+                      value: item.text,
+                      placeholder: "New task\u2026",
+                      disabled: item.done,
+                      onChange: (ev) => updateTaskText(item.id, ev.target.value),
+                      onFocus: () => setEditingId(item.id),
+                      onBlur: () => {
+                        if (suppressNextBlur.current) { suppressNextBlur.current = false; return; }
+                        // Delete task if it was left empty
+                        if (!item.text.trim()) {
+                          removeTask(catIdx, item.id);
+                        }
+                        setEditingId(id => id === item.id ? null : id);
+                      },
+                      onKeyDown: (ev) => {
+                        if (ev.key === "Enter") {
+                          ev.preventDefault();
+                          addTaskAfter(catIdx, item.id);
+                        } else if (ev.key === "Backspace" && item.text === "") {
+                          ev.preventDefault();
+                          deleteTaskFocusPrev(catIdx, item.id);
+                        } else if (ev.key === "Escape") {
+                          ev.target.blur();
+                        }
+                      },
+                      style: {
+                        fontSize: 14,
+                        color: item.done ? "#999" : "#1a1a1a",
+                        textDecoration: item.done ? "line-through" : "none",
+                      },
+                    }),
+                    hasSubs && e("span", { style: { fontSize: 10, color: "#999", flexShrink: 0 } }, "(" + subsDone + "/" + subsTotal + ")"),
                   ),
                   !item.done && e("div", { style: { display: "flex", alignItems: "center", gap: 12, marginTop: 6 } },
                     e(PriorityPips, { value: item.priority || 3, onChange: (v) => updateItemField(item.id, "priority", v) }),
@@ -522,8 +604,9 @@ function App() {
                     ),
                   ),
                 ),
-                e("div", { onClick: () => removeTask(catIdx, item.id), style: { fontSize: 14, color: "#ccc", cursor: "pointer", lineHeight: 1, padding: "0 2px" }, title: "Remove" }, "\u00d7"),
+                e("div", { className: "del-btn", onClick: () => removeTask(catIdx, item.id), style: { fontSize: 14, color: "#ccc", cursor: "pointer", lineHeight: 1, padding: "0 2px", flexShrink: 0 }, title: "Remove" }, "\u00d7"),
               ),
+
               // Subtasks
               hasSubs && isExp && e("div", { style: { marginLeft: 44, marginBottom: 6 } },
                 item.subtasks.map(sub => {
@@ -547,27 +630,17 @@ function App() {
               ),
             );
           }),
+
+          // Per-category add row
+          e("div", { className: "add-task-row", onClick: () => addTaskAtEnd(catIdx), style: {
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "6px 12px", marginTop: 2, borderRadius: 4,
+          }},
+            e("div", { style: { width: 20, height: 20, minWidth: 20, display: "flex", alignItems: "center", justifyContent: "center", color: "#bbb", fontSize: 16, lineHeight: 1 } }, "+"),
+            e("span", { style: { fontSize: 13, color: "#bbb" } }, "New task"),
+          ),
         );
       }),
-
-      // Add task
-      !showAdd
-        ? e("div", { onClick: () => setShowAdd(true), style: { padding: "12px 0", textAlign: "center", fontSize: 13, color: "#999", cursor: "pointer", borderTop: "1px dashed #ddd", marginTop: 12 } }, "+ Add task")
-        : e("div", { style: { padding: 16, background: "#fff", border: "1px solid #e5e5e0", borderRadius: 6, marginTop: 12 } },
-            e("input", { type: "text", value: newTask, onChange: (ev) => setNewTask(ev.target.value), onKeyDown: (ev) => { if (ev.key === "Enter") addTask(); }, placeholder: "What needs doing?", autoFocus: true, style: { width: "100%", padding: "8px 0", border: "none", borderBottom: "1px solid #e5e5e0", outline: "none", fontSize: 14, fontFamily: "'IBM Plex Mono', monospace", background: "transparent", marginBottom: 12, boxSizing: "border-box" } }),
-            e("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" } },
-              e("select", { value: newCategory, onChange: (ev) => setNewCategory(Number(ev.target.value)), style: { fontSize: 11, padding: "4px 8px", border: "1px solid #ddd", borderRadius: 4, fontFamily: "'IBM Plex Mono', monospace", background: "#fff" } },
-                tasks.map((cat, i) => e("option", { key: i, value: i }, cat.category))
-              ),
-              e("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
-                e("span", { style: { fontSize: 10, color: "#999" } }, "Priority:"),
-                e(PriorityPips, { value: newPriority, onChange: setNewPriority }),
-              ),
-              e("div", { style: { flex: 1 } }),
-              e("span", { onClick: () => setShowAdd(false), style: { fontSize: 12, color: "#999", cursor: "pointer" } }, "cancel"),
-              e("span", { onClick: addTask, style: { fontSize: 12, fontWeight: 600, color: "#D94F00", cursor: "pointer" } }, "add \u2192"),
-            ),
-          ),
     ),
   );
 }
