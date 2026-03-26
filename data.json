@@ -99,13 +99,6 @@
           "done": false,
           "priority": 3,
           "date": null
-        },
-        {
-          "id": "s4",
-          "text": "Keep training — stay in shape",
-          "done": false,
-          "priority": 5,
-          "date": null
         }
       ]
     },
@@ -235,5 +228,5 @@
       ]
     }
   ],
-  "updatedAt": "2026-03-23T21:44:07.547Z"
+  "updatedAt": "2026-03-26T06:18:20.611Z"
 }
