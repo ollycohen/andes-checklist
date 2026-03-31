@@ -93,12 +93,20 @@ function pipColor(v) {
   return "#9CA3AF";
 }
 
-function loadTasks() {
-  try { const s = localStorage.getItem(STORAGE_KEY); if (s) return JSON.parse(s); } catch(e){}
-  return INITIAL_TASKS;
+function loadTasksWithMeta() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (s) {
+      const parsed = JSON.parse(s);
+      if (Array.isArray(parsed)) return { tasks: parsed, updatedAt: null };
+      if (parsed && parsed.tasks) return parsed;
+    }
+  } catch(e){}
+  return { tasks: INITIAL_TASKS, updatedAt: null };
 }
+function loadTasks() { return loadTasksWithMeta().tasks; }
 function persistTasks(t) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(t)); } catch(e){}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: t, updatedAt: new Date().toISOString() })); } catch(e){}
 }
 
 /* ─── GitHub Sync ─── */
@@ -115,7 +123,7 @@ async function fetchRemoteTasks() {
     const data = await resp.json();
     _fileSha = data.sha;
     const content = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(data.content), c => c.charCodeAt(0))));
-    return content.tasks || null;
+    return content.tasks ? { tasks: content.tasks, updatedAt: content.updatedAt || null } : null;
   } catch(err) { console.error("Sync fetch error:", err); return null; }
 }
 
@@ -374,8 +382,8 @@ function App() {
       if (result.ok) {
         setSyncStatus("synced");
       } else if (result.error === "conflict" && result.remoteTasks) {
-        setTasks(result.remoteTasks);
-        persistTasks(result.remoteTasks);
+        setTasks(result.remoteTasks.tasks);
+        persistTasks(result.remoteTasks.tasks);
         setSyncStatus("synced");
       } else {
         setSyncStatus("error");
@@ -383,14 +391,21 @@ function App() {
     }, 2000);
   }
 
-  // Fetch remote on mount
+  // Fetch remote on mount — prefer whichever source is newer
   useEffect(() => {
     if (!SYNC_ENABLED) return;
     setSyncStatus("syncing");
     fetchRemoteTasks().then(remote => {
       if (remote) {
-        setTasks(remote);
-        persistTasks(remote);
+        const localMeta = loadTasksWithMeta();
+        const remoteNewer = !localMeta.updatedAt || !remote.updatedAt ||
+          new Date(remote.updatedAt) >= new Date(localMeta.updatedAt);
+        if (remoteNewer) {
+          setTasks(remote.tasks);
+          persistTasks(remote.tasks);
+        } else {
+          debouncedPush.current(localMeta.tasks);
+        }
         setSyncStatus("synced");
       } else {
         debouncedPush.current(loadTasks());
