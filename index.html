@@ -16,6 +16,8 @@
   .task-input::placeholder { color: #ccc; }
   .add-task-row { opacity: 0; transition: opacity 0.2s ease; cursor: text; }
   .category-block:hover .add-task-row { opacity: 1; }
+  [draggable="true"] { transition: opacity 0.15s ease; }
+  [draggable="true"]:active { opacity: 0.5; cursor: grabbing; }
 </style>
 </head>
 <body>
@@ -534,6 +536,86 @@ function ChecklistApp() {
     if (prev) focusItem(prev.id);
   };
 
+  // Tab: indent task as subtask of previous item
+  const indentTask = (catIdx, itemId) => {
+    const cat = tasks[catIdx];
+    const idx = cat.items.findIndex(it => it.id === itemId);
+    if (idx <= 0) return; // first item can't indent
+    const item = cat.items[idx];
+    const parent = cat.items[idx - 1];
+    const sub = { id: item.id, text: item.text, done: item.done, priority: item.priority, date: item.date };
+    const updated = tasks.map((c, ci) => {
+      if (ci !== catIdx) return c;
+      const items = c.items.filter(it => it.id !== itemId).map(it => {
+        if (it.id === parent.id) return { ...it, subtasks: [...(it.subtasks || []), sub] };
+        return it;
+      });
+      return { ...c, items };
+    });
+    saveTasks(updated);
+    setExpanded(prev => ({ ...prev, [parent.id]: true }));
+    focusItem(item.id);
+  };
+
+  // Shift+Tab: outdent subtask to a top-level task after its parent
+  const outdentSubtask = (catIdx, parentId, subId) => {
+    let subItem = null;
+    const cat = tasks[catIdx];
+    const parent = cat.items.find(it => it.id === parentId);
+    if (!parent || !parent.subtasks) return;
+    subItem = parent.subtasks.find(s => s.id === subId);
+    if (!subItem) return;
+    const promoted = { id: subItem.id, text: subItem.text, done: subItem.done, priority: subItem.priority || parent.priority || 3, date: subItem.date || null };
+    const updated = tasks.map((c, ci) => {
+      if (ci !== catIdx) return c;
+      const items = [];
+      for (const it of c.items) {
+        if (it.id === parentId) {
+          const newSubs = (it.subtasks || []).filter(s => s.id !== subId);
+          items.push({ ...it, subtasks: newSubs.length > 0 ? newSubs : undefined });
+          items.push(promoted);
+        } else {
+          items.push(it);
+        }
+      }
+      return { ...c, items };
+    });
+    saveTasks(updated);
+    focusItem(subItem.id);
+  };
+
+  // Drag and drop reordering
+  const dragItem = useRef(null);
+  const dragOverItem = useRef(null);
+
+  const onDragStart = (catIdx, itemIdx) => {
+    dragItem.current = { catIdx, itemIdx };
+  };
+  const onDragOver = (ev, catIdx, itemIdx) => {
+    ev.preventDefault();
+    dragOverItem.current = { catIdx, itemIdx };
+  };
+  const onDrop = (ev) => {
+    ev.preventDefault();
+    const from = dragItem.current;
+    const to = dragOverItem.current;
+    if (!from || !to || from.catIdx !== to.catIdx || from.itemIdx === to.itemIdx) {
+      dragItem.current = null;
+      dragOverItem.current = null;
+      return;
+    }
+    const updated = tasks.map((cat, ci) => {
+      if (ci !== from.catIdx) return cat;
+      const items = [...cat.items];
+      const [moved] = items.splice(from.itemIdx, 1);
+      items.splice(to.itemIdx, 0, moved);
+      return { ...cat, items };
+    });
+    saveTasks(updated);
+    dragItem.current = null;
+    dragOverItem.current = null;
+  };
+
   const countAll = (t) => { let total = 0, done = 0; for (const c of t) for (const i of c.items) { total++; if (i.done) done++; if (i.subtasks) for (const s of i.subtasks) { total++; if (s.done) done++; } } return { total, done }; };
   const { total: totalTasks, done: doneTasks } = countAll(tasks);
   const pct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
@@ -589,7 +671,7 @@ function ChecklistApp() {
             e("span", { style: { fontSize: 11, color: "#999" } }, catDone + "/" + catTotal),
           ),
 
-          // Items
+          // Items — use cat.items for drag indices, sortedItems for display
           sortedItems.map(item => {
             const hasSubs = item.subtasks && item.subtasks.length > 0;
             const isExp = expanded[item.id] !== false;
@@ -599,14 +681,16 @@ function ChecklistApp() {
             const isOverdue = days !== null && days < 0;
             const isSoon = days !== null && days >= 0 && days <= 7;
             const isEditing = editingId === item.id;
+            const origIdx = cat.items.findIndex(it => it.id === item.id);
 
-            return e("div", { key: item.id },
+            return e("div", { key: item.id, draggable: !item.done, onDragStart: () => onDragStart(catIdx, origIdx), onDragOver: (ev) => onDragOver(ev, catIdx, origIdx), onDrop: onDrop, onDragEnd: () => { dragItem.current = null; dragOverItem.current = null; } },
               e("div", { className: "task-row", style: {
                 display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 12px", marginBottom: 1,
                 borderRadius: 4,
                 background: isEditing ? "rgba(37,99,235,0.04)" : item.done ? "transparent" : "rgba(0,0,0,0.015)",
                 opacity: item.done ? 0.5 : 1,
                 transition: "opacity 0.3s ease, background 0.15s ease",
+                cursor: item.done ? "default" : "grab",
               }},
                 e(Checkbox, { checked: item.done, onClick: () => toggleTask(catIdx, item.id) }),
                 e("div", { style: { flex: 1, minWidth: 0 } },
@@ -634,7 +718,11 @@ function ChecklistApp() {
                         setEditingId(id => id === item.id ? null : id);
                       },
                       onKeyDown: (ev) => {
-                        if (ev.key === "Enter") {
+                        if (ev.key === "Tab" && !ev.shiftKey) {
+                          ev.preventDefault();
+                          suppressNextBlur.current = true;
+                          indentTask(catIdx, item.id);
+                        } else if (ev.key === "Enter") {
                           ev.preventDefault();
                           addTaskAfter(catIdx, item.id);
                         } else if (ev.key === "Backspace" && item.text === "") {
@@ -672,7 +760,23 @@ function ChecklistApp() {
                   return e("div", { key: sub.id, style: { display: "flex", alignItems: "flex-start", gap: 10, padding: "6px 8px", opacity: sub.done ? 0.4 : 0.85, transition: "opacity 0.3s ease" } },
                     e(Checkbox, { checked: sub.done, onClick: () => toggleSubtask(catIdx, item.id, sub.id), size: 16 }),
                     e("div", { style: { flex: 1, minWidth: 0 } },
-                      e("span", { style: { fontSize: 12, color: sub.done ? "#999" : "#555", textDecoration: sub.done ? "line-through" : "none" } }, sub.text),
+                      e("input", {
+                        className: "task-input",
+                        ref: (el) => { if (el) inputRefs.current[sub.id] = el; },
+                        value: sub.text,
+                        disabled: sub.done,
+                        onChange: (ev) => updateItemField(sub.id, "text", ev.target.value),
+                        onKeyDown: (ev) => {
+                          if (ev.key === "Tab" && ev.shiftKey) {
+                            ev.preventDefault();
+                            suppressNextBlur.current = true;
+                            outdentSubtask(catIdx, item.id, sub.id);
+                          } else if (ev.key === "Escape") {
+                            ev.target.blur();
+                          }
+                        },
+                        style: { fontSize: 12, color: sub.done ? "#999" : "#555", textDecoration: sub.done ? "line-through" : "none" },
+                      }),
                       !sub.done && e("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 4 } },
                         e(PriorityPips, { value: sub.priority != null ? sub.priority : (item.priority || 3), onChange: (v) => updateItemField(sub.id, "priority", v) }),
                         e("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
