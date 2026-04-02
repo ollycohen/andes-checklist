@@ -4,8 +4,11 @@ const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const PASSWORD = "bolivar";
-const DATA_FILE = path.join(__dirname, "data.json");
+const PASSWORD = process.env.PASSWORD || "bolivar";
+
+// Use /data (Fly.io persistent volume) if it exists, otherwise local directory
+const DATA_DIR = fs.existsSync("/data") ? "/data" : __dirname;
+const DATA_FILE = path.join(DATA_DIR, "data.json");
 
 app.use(express.json({ limit: "2mb" }));
 
