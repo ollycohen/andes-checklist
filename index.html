@@ -106,7 +106,15 @@ function loadTasksWithMeta() {
 }
 function loadTasks() { return loadTasksWithMeta().tasks; }
 function persistTasks(t) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: t, updatedAt: new Date().toISOString() })); } catch(e){}
+  try {
+    const data = JSON.stringify({ tasks: t, updatedAt: new Date().toISOString() });
+    localStorage.setItem(STORAGE_KEY, data);
+    // Verify write succeeded
+    const check = localStorage.getItem(STORAGE_KEY);
+    if (!check) console.error("localStorage write failed — data may not persist");
+  } catch(err) {
+    console.error("persistTasks error:", err);
+  }
 }
 
 /* ─── GitHub Sync ─── */
@@ -362,8 +370,63 @@ function SyncBadge({ status }) {
   );
 }
 
+/* ─── Password Gate ─── */
+const AUTH_KEY = "andes-auth";
+const PASS_HASH = "626f6c69766172"; // hex-encoded password
+
+function checkPassword(input) {
+  const hex = Array.from(input).map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
+  return hex === PASS_HASH;
+}
+
+function PasswordGate({ onAuth }) {
+  const [pw, setPw] = useState("");
+  const [error, setError] = useState(false);
+  const submit = () => {
+    if (checkPassword(pw)) {
+      sessionStorage.setItem(AUTH_KEY, "1");
+      onAuth();
+    } else {
+      setError(true);
+      setPw("");
+    }
+  };
+  return e("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#FAFAF8", fontFamily: "'IBM Plex Mono', monospace" } },
+    e("div", { style: { textAlign: "center", maxWidth: 340, padding: 32 } },
+      e("div", { style: { fontFamily: "'DM Serif Display', serif", fontSize: 28, marginBottom: 8 } }, "Andes Expedition"),
+      e("div", { style: { fontSize: 11, color: "#999", letterSpacing: "0.5px", marginBottom: 32 } }, "ENTER PASSWORD"),
+      e("input", {
+        type: "password", value: pw,
+        onChange: (ev) => { setPw(ev.target.value); setError(false); },
+        onKeyDown: (ev) => { if (ev.key === "Enter") submit(); },
+        autoFocus: true,
+        placeholder: "Password",
+        style: {
+          width: "100%", padding: "10px 14px", fontSize: 14, fontFamily: "'IBM Plex Mono', monospace",
+          border: "1px solid " + (error ? "#DC2626" : "#e5e5e0"), borderRadius: 6, outline: "none",
+          background: "#fff", textAlign: "center",
+        },
+      }),
+      error && e("div", { style: { color: "#DC2626", fontSize: 11, marginTop: 8 } }, "Incorrect password"),
+      e("button", { onClick: submit, style: {
+        marginTop: 16, padding: "10px 32px", fontSize: 12, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace",
+        background: "#1a1a1a", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer",
+        letterSpacing: "0.5px",
+      } }, "ENTER"),
+    ),
+  );
+}
+
 /* ─── Main App ─── */
 function App() {
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem(AUTH_KEY) === "1");
+
+  if (!authed) return e(PasswordGate, { onAuth: () => setAuthed(true) });
+
+  return e(ChecklistApp);
+}
+
+function ChecklistApp() {
   const [tasks, setTasks] = useState(loadTasks);
   const [expanded, setExpanded] = useState({});
   const [view, setView] = useState("list");
