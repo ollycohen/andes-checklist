@@ -536,24 +536,24 @@ function ChecklistApp() {
     if (prev) focusItem(prev.id);
   };
 
-  // Tab: indent task as subtask of previous item
-  const indentTask = (catIdx, itemId) => {
+  // Tab: indent task as subtask of the visually-previous item
+  const indentTask = (catIdx, itemId, parentId) => {
+    if (!parentId) return;
     const cat = tasks[catIdx];
-    const idx = cat.items.findIndex(it => it.id === itemId);
-    if (idx <= 0) return; // first item can't indent
-    const item = cat.items[idx];
-    const parent = cat.items[idx - 1];
+    const item = cat.items.find(it => it.id === itemId);
+    const parent = cat.items.find(it => it.id === parentId);
+    if (!item || !parent) return;
     const sub = { id: item.id, text: item.text, done: item.done, priority: item.priority, date: item.date };
     const updated = tasks.map((c, ci) => {
       if (ci !== catIdx) return c;
       const items = c.items.filter(it => it.id !== itemId).map(it => {
-        if (it.id === parent.id) return { ...it, subtasks: [...(it.subtasks || []), sub] };
+        if (it.id === parentId) return { ...it, subtasks: [...(it.subtasks || []), sub] };
         return it;
       });
       return { ...c, items };
     });
     saveTasks(updated);
-    setExpanded(prev => ({ ...prev, [parent.id]: true }));
+    setExpanded(prev => ({ ...prev, [parentId]: true }));
     focusItem(item.id);
   };
 
@@ -672,7 +672,7 @@ function ChecklistApp() {
           ),
 
           // Items — use cat.items for drag indices, sortedItems for display
-          sortedItems.map(item => {
+          sortedItems.map((item, sortedIdx) => {
             const hasSubs = item.subtasks && item.subtasks.length > 0;
             const isExp = expanded[item.id] !== false;
             const subsDone = hasSubs ? item.subtasks.filter(s => s.done).length : 0;
@@ -682,16 +682,17 @@ function ChecklistApp() {
             const isSoon = days !== null && days >= 0 && days <= 7;
             const isEditing = editingId === item.id;
             const origIdx = cat.items.findIndex(it => it.id === item.id);
+            const visualPrev = sortedIdx > 0 ? sortedItems[sortedIdx - 1] : null;
 
-            return e("div", { key: item.id, draggable: !item.done, onDragStart: () => onDragStart(catIdx, origIdx), onDragOver: (ev) => onDragOver(ev, catIdx, origIdx), onDrop: onDrop, onDragEnd: () => { dragItem.current = null; dragOverItem.current = null; } },
+            return e("div", { key: item.id, onDragOver: (ev) => onDragOver(ev, catIdx, origIdx), onDrop: onDrop },
               e("div", { className: "task-row", style: {
                 display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 12px", marginBottom: 1,
                 borderRadius: 4,
                 background: isEditing ? "rgba(37,99,235,0.04)" : item.done ? "transparent" : "rgba(0,0,0,0.015)",
                 opacity: item.done ? 0.5 : 1,
                 transition: "opacity 0.3s ease, background 0.15s ease",
-                cursor: item.done ? "default" : "grab",
               }},
+                !item.done && e("div", { draggable: true, onDragStart: () => onDragStart(catIdx, origIdx), onDragEnd: () => { dragItem.current = null; dragOverItem.current = null; }, style: { cursor: "grab", color: "#ccc", fontSize: 11, lineHeight: "20px", userSelect: "none", flexShrink: 0 }, title: "Drag to reorder" }, "\u2261"),
                 e(Checkbox, { checked: item.done, onClick: () => toggleTask(catIdx, item.id) }),
                 e("div", { style: { flex: 1, minWidth: 0 } },
                   e("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
@@ -720,8 +721,10 @@ function ChecklistApp() {
                       onKeyDown: (ev) => {
                         if (ev.key === "Tab" && !ev.shiftKey) {
                           ev.preventDefault();
-                          suppressNextBlur.current = true;
-                          indentTask(catIdx, item.id);
+                          if (visualPrev && !item.done) {
+                            suppressNextBlur.current = true;
+                            indentTask(catIdx, item.id, visualPrev.id);
+                          }
                         } else if (ev.key === "Enter") {
                           ev.preventDefault();
                           addTaskAfter(catIdx, item.id);
