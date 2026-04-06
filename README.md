@@ -9,8 +9,8 @@ Interactive pre-departure checklist with priority matrix visualization.
 
 ## Deploy
 
-Hosted on GitHub Pages at [checklist.ollycohen.com](https://checklist.ollycohen.com).
+Hosted on GitHub Pages at [plan.ollycohen.com](https://plan.ollycohen.com).
 
 ## DNS Setup
 
-Add a CNAME record for `checklist.ollycohen.com` pointing to `<your-github-username>.github.io`.
+Add a CNAME record for `plan.ollycohen.com` pointing to `<your-github-username>.github.io`.

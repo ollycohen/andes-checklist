@@ -1,6 +1,6 @@
 const { Resend } = require("resend");
 
-const API_BASE = process.env.API_URL || "https://andes-plan.fly.dev";
+const API_BASE = process.env.API_URL || "https://plan.ollycohen.com";
 const API_TOKEN = process.env.API_TOKEN;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_TO_FALLBACK = process.env.EMAIL_TO;
@@ -118,7 +118,7 @@ async function main() {
   ${section("🔥 High Priority (undated)", highPriUndated)}
 
   <div style="text-align: center; padding: 20px 0; border-top: 1px solid #e0e0e0; margin-top: 20px;">
-    <a href="https://checklist.ollycohen.com" style="color: #c9a96e; text-decoration: none; font-size: 13px;">Open Checklist →</a>
+    <a href="https://plan.ollycohen.com" style="color: #c9a96e; text-decoration: none; font-size: 13px;">Open Checklist →</a>
   </div>
 
 </body>
