@@ -99,6 +99,34 @@ app.put("/api/emails", requireAuth, (req, res) => {
   }
 });
 
+// GET /api/title — return project title
+app.get("/api/title", requireAuth, (req, res) => {
+  try {
+    const data = readData();
+    res.json({ title: data.title || "Andes Expedition" });
+  } catch (err) {
+    console.error("Error reading title:", err.message);
+    res.status(500).json({ error: "Failed to read title" });
+  }
+});
+
+// PUT /api/title — update project title
+app.put("/api/title", requireAuth, (req, res) => {
+  try {
+    const { title } = req.body;
+    if (typeof title !== "string" || !title.trim()) {
+      return res.status(400).json({ error: "Non-empty title string required" });
+    }
+    const data = readData();
+    data.title = title.trim();
+    writeData(data);
+    res.json({ ok: true, title: data.title });
+  } catch (err) {
+    console.error("Error writing title:", err.message);
+    res.status(500).json({ error: "Failed to write title" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log("Andes checklist server running on http://localhost:" + PORT);
 });

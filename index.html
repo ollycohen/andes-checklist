@@ -689,6 +689,9 @@ function ChecklistApp() {
   const [syncStatus, setSyncStatus] = useState("syncing");
   const [editingId, setEditingId] = useState(null);
   const [showEmails, setShowEmails] = useState(false);
+  const [title, setTitle] = useState("Andes Expedition");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const titleRef = useRef(null);
   const inputRefs = useRef({});
   const suppressNextBlur = useRef(false);
 
@@ -729,7 +732,24 @@ function ChecklistApp() {
         debouncedPush.current(loadTasks());
       }
     }).catch(() => setSyncStatus("error"));
+    // Fetch title
+    fetch("/api/title", { headers: { "Authorization": "Bearer " + getAuthToken() } })
+      .then(r => r.ok ? r.json() : null).then(d => { if (d && d.title) setTitle(d.title); });
   }, []);
+
+  // Sync document.title with editable title
+  useEffect(() => { document.title = title; }, [title]);
+
+  const saveTitle = (newTitle) => {
+    const t = newTitle.trim();
+    if (!t) return;
+    setTitle(t);
+    fetch("/api/title", {
+      method: "PUT",
+      headers: { "Authorization": "Bearer " + getAuthToken(), "Content-Type": "application/json" },
+      body: JSON.stringify({ title: t }),
+    });
+  };
 
   const saveTasks = useCallback((updated) => {
     setTasks(updated);
@@ -809,6 +829,25 @@ function ChecklistApp() {
     if (prev) focusItem(prev.id);
   };
 
+  const makeSubtask = (catIdx, itemId) => {
+    const items = tasks[catIdx].items;
+    const idx = items.findIndex(it => it.id === itemId);
+    if (idx <= 0) return; // first item can't become a subtask
+    const item = items[idx];
+    const parentId = items[idx - 1].id;
+    suppressNextBlur.current = true;
+    const updated = tasks.map((cat, ci) => {
+      if (ci !== catIdx) return cat;
+      return { ...cat, items: cat.items.filter(it => it.id !== itemId).map(it => {
+        if (it.id !== parentId) return it;
+        const sub = { id: item.id, text: item.text, done: item.done, priority: item.priority, date: item.date };
+        return { ...it, subtasks: [...(it.subtasks || []), sub] };
+      })};
+    });
+    saveTasks(updated);
+    setExpanded(prev => ({ ...prev, [parentId]: true }));
+  };
+
   const countAll = (t) => { let total = 0, done = 0; for (const c of t) for (const i of c.items) { total++; if (i.done) done++; if (i.subtasks) for (const s of i.subtasks) { total++; if (s.done) done++; } } return { total, done }; };
   const { total: totalTasks, done: doneTasks } = countAll(tasks);
   const pct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
@@ -820,8 +859,20 @@ function ChecklistApp() {
     // Header
     e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32 } },
       e("div", null,
-        e("div", { style: { fontFamily: "'DM Serif Display', serif", fontSize: 32, letterSpacing: "-0.5px", marginBottom: 4 } }, "Andes Expedition"),
-        e("div", { style: { fontSize: 12, color: "#999", letterSpacing: "0.5px" } }, "PREP & PLANNING CHECKLIST"),
+        editingTitle
+          ? e("input", {
+              ref: titleRef,
+              value: title,
+              onChange: (ev) => setTitle(ev.target.value),
+              onBlur: () => { saveTitle(title); setEditingTitle(false); },
+              onKeyDown: (ev) => { if (ev.key === "Enter") { saveTitle(title); setEditingTitle(false); } if (ev.key === "Escape") setEditingTitle(false); },
+              style: { fontFamily: "'DM Serif Display', serif", fontSize: 32, letterSpacing: "-0.5px", marginBottom: 4, background: "transparent", border: "none", borderBottom: "2px solid #c9a96e", outline: "none", padding: 0, width: "100%", color: "#1a1a1a" },
+            })
+          : e("div", {
+              onClick: () => { setEditingTitle(true); setTimeout(() => { if (titleRef.current) { titleRef.current.focus(); titleRef.current.select(); } }, 0); },
+              style: { fontFamily: "'DM Serif Display', serif", fontSize: 32, letterSpacing: "-0.5px", marginBottom: 4, cursor: "text" },
+            }, title),
+        e("div", { style: { fontSize: 12, color: "#999", letterSpacing: "0.5px" } }, "CHECKLIST"),
       ),
       e("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, marginTop: 6 } },
         e("div", { style: { display: "flex", background: "#fff", border: "1px solid #e5e5e0", borderRadius: 6, overflow: "hidden" } },
@@ -914,7 +965,10 @@ function ChecklistApp() {
                         setEditingId(id => id === item.id ? null : id);
                       },
                       onKeyDown: (ev) => {
-                        if (ev.key === "Enter") {
+                        if (ev.key === "Tab" && !ev.shiftKey) {
+                          ev.preventDefault();
+                          makeSubtask(catIdx, item.id);
+                        } else if (ev.key === "Enter") {
                           ev.preventDefault();
                           addTaskAfter(catIdx, item.id);
                         } else if (ev.key === "Backspace" && item.text === "") {

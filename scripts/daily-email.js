@@ -38,6 +38,11 @@ async function main() {
     return;
   }
 
+  // Fetch title
+  const titleRes = await fetch(`${API_BASE}/api/title`, { headers });
+  const titleData = titleRes.ok ? await titleRes.json() : {};
+  const projectTitle = titleData.title || "Andes Expedition";
+
   // Fetch tasks from the live API
   const res = await fetch(`${API_BASE}/api/tasks`, { headers });
   if (!res.ok) throw new Error(`API returned ${res.status}`);
@@ -106,7 +111,7 @@ async function main() {
 <body style="font-family: 'IBM Plex Mono', monospace, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #fafafa; color: #1a1a1a;">
 
   <div style="text-align: center; padding: 20px 0 10px;">
-    <h1 style="margin: 0; font-size: 22px; letter-spacing: 2px;">⛰️ ANDES CHECKLIST</h1>
+    <h1 style="margin: 0; font-size: 22px; letter-spacing: 2px;">⛰️ ${projectTitle.toUpperCase()}</h1>
     <p style="color: #888; font-size: 12px; margin: 4px 0;">${formatDate(today)}</p>
     <p style="color: #888; font-size: 12px; margin: 0;">${pct}% complete (${doneItems}/${totalItems})</p>
   </div>
@@ -130,9 +135,9 @@ async function main() {
   // Send via Resend
   const resend = new Resend(RESEND_API_KEY);
   const { error } = await resend.emails.send({
-    from: "Andes Checklist <onboarding@resend.dev>",
+    from: `${projectTitle} <onboarding@resend.dev>`,
     to: recipients,
-    subject: `⛰️ Andes Update — ${formatDate(today)}`,
+    subject: `⛰️ ${projectTitle} — ${formatDate(today)}`,
     html,
   });
 
