@@ -25,6 +25,9 @@ async function main() {
 
   // Fetch recipients from the API, fall back to EMAIL_TO env var
   const emailRes = await fetch(`${API_BASE}/api/emails`, { headers });
+  if (!emailRes.ok) {
+    console.error(`Failed to fetch emails: ${emailRes.status} ${emailRes.statusText}`);
+  }
   const emailData = emailRes.ok ? await emailRes.json() : { emails: [] };
   const recipients = emailData.emails && emailData.emails.length > 0
     ? emailData.emails
