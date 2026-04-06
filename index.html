@@ -684,7 +684,8 @@ function App() {
 function ChecklistApp() {
   const [tasks, setTasks] = useState(loadTasks);
   const [expanded, setExpanded] = useState({});
-  const [view, setView] = useState("list");
+  const [view, _setView] = useState(() => sessionStorage.getItem("andes-view") || "list");
+  const setView = (v) => { sessionStorage.setItem("andes-view", v); _setView(v); };
   const [syncStatus, setSyncStatus] = useState("syncing");
   const [editingId, setEditingId] = useState(null);
   const [showEmails, setShowEmails] = useState(false);
