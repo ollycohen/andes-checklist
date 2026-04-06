@@ -331,6 +331,208 @@ function ScatterPlot({ tasks, onUpdate, catColors }) {
   );
 }
 
+/* ─── Month Calendar ─── */
+function MonthCalendar({ tasks, catColors, onUpdateField }) {
+  const [dragId, setDragId] = useState(null);
+  const [hoverId, setHoverId] = useState(null);
+  const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
+  const [clickedId, setClickedId] = useState(null);
+  const [clickPos, setClickPos] = useState({ x: 0, y: 0 });
+  const [editText, setEditText] = useState("");
+  const [editPriority, setEditPriority] = useState(3);
+  const [monthOffset, setMonthOffset] = useState(0);
+  const editRef = useRef(null);
+  const calRef = useRef(null);
+
+  const now = new Date();
+  const viewYear = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1).getFullYear();
+  const viewMonth = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1).getMonth();
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const monthName = new Date(viewYear, viewMonth, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  // Collect all undone items with dates in this month
+  const itemsByDate = {};
+  let ci = 0;
+  for (const cat of tasks) {
+    for (const item of cat.items) {
+      const addItem = (it, parentItem) => {
+        if (it.done) return;
+        const d = it.date || (parentItem && parentItem.date) || null;
+        if (!d) return;
+        const dt = new Date(d + "T00:00:00");
+        if (dt.getFullYear() === viewYear && dt.getMonth() === viewMonth) {
+          const day = dt.getDate();
+          if (!itemsByDate[day]) itemsByDate[day] = [];
+          itemsByDate[day].push({ id: it.id, text: it.text, priority: it.priority != null ? it.priority : (parentItem ? parentItem.priority || 3 : 3), date: d, color: catColors[ci % catColors.length], catIdx: ci });
+        }
+      };
+      if (item.subtasks && item.subtasks.length > 0) {
+        for (const sub of item.subtasks) addItem(sub, item);
+      } else {
+        addItem(item, null);
+      }
+    }
+    ci++;
+  }
+
+  const pad = (n) => String(n).padStart(2, "0");
+  const toDateStr = (day) => viewYear + "-" + pad(viewMonth + 1) + "-" + pad(day);
+
+  const onDragStart = (ev, itemId) => { setDragId(itemId); ev.dataTransfer.effectAllowed = "move"; };
+  const onDragOver = (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; };
+  const onDrop = (ev, day) => {
+    ev.preventDefault();
+    if (dragId) {
+      onUpdateField(dragId, "date", toDateStr(day));
+      setDragId(null);
+    }
+  };
+
+  const openEdit = (item) => {
+    setClickedId(item.id);
+    setEditText(item.text);
+    setEditPriority(item.priority);
+    setTimeout(() => { if (editRef.current) editRef.current.focus(); }, 0);
+  };
+
+  const saveEdit = () => {
+    if (clickedId) {
+      onUpdateField(clickedId, "text", editText);
+      onUpdateField(clickedId, "priority", editPriority);
+      setClickedId(null);
+      setHoverId(null);
+    }
+  };
+
+  const todayDate = now.getDate();
+  const isCurrentMonth = now.getFullYear() === viewYear && now.getMonth() === viewMonth;
+
+  const cells = [];
+  // Empty cells for days before the 1st
+  for (let i = 0; i < firstDay; i++) cells.push(e("div", { key: "e" + i, style: { background: "#fafaf8", borderRadius: 4, minHeight: 80 } }));
+  // Day cells
+  for (let day = 1; day <= daysInMonth; day++) {
+    const items = itemsByDate[day] || [];
+    const isToday = isCurrentMonth && day === todayDate;
+    cells.push(e("div", {
+      key: day,
+      onDragOver,
+      onDrop: (ev) => onDrop(ev, day),
+      style: {
+        background: isToday ? "#FFF7ED" : "#fff",
+        border: isToday ? "2px solid #D94F00" : "1px solid #e5e5e0",
+        borderRadius: 4,
+        minHeight: 80,
+        padding: 4,
+        position: "relative",
+        transition: "background 0.15s ease",
+      },
+    },
+      e("div", { style: { fontSize: 10, fontWeight: isToday ? 700 : 500, color: isToday ? "#D94F00" : "#999", marginBottom: 2, fontFamily: "'IBM Plex Mono', monospace" } }, day),
+      items.map(item => e("div", {
+        key: item.id,
+        draggable: true,
+        onDragStart: (ev) => onDragStart(ev, item.id),
+        onMouseEnter: (ev) => { const r = ev.currentTarget.getBoundingClientRect(); setHoverId(item.id); setHoverPos({ x: r.left, y: r.bottom + 4 }); },
+        onMouseLeave: () => { if (clickedId !== item.id) setHoverId(null); },
+        onClick: (ev) => { ev.stopPropagation(); const r = ev.currentTarget.getBoundingClientRect(); setClickPos({ x: r.left, y: r.bottom + 4 }); openEdit(item); },
+        style: {
+          background: item.color + "22",
+          borderLeft: "3px solid " + item.color,
+          borderRadius: 3,
+          padding: "2px 5px",
+          marginBottom: 2,
+          fontSize: 9,
+          fontFamily: "'IBM Plex Mono', monospace",
+          color: "#1a1a1a",
+          cursor: "grab",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          lineHeight: "16px",
+        },
+      },
+        item.text.length > 18 ? item.text.slice(0, 18) + "\u2026" : item.text,
+      )),
+    ));
+  }
+
+  // Close edit popover on outside click
+  useEffect(() => {
+    if (!clickedId) return;
+    const handler = () => { setClickedId(null); setHoverId(null); };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [clickedId]);
+
+  // Build flat lookup for overlay rendering
+  const allItems = {};
+  Object.values(itemsByDate).forEach(arr => arr.forEach(it => { allItems[it.id] = it; }));
+  const hovItem = hoverId && allItems[hoverId];
+  const clickItem = clickedId && allItems[clickedId];
+
+  return e("div", { ref: calRef, style: { marginTop: 16, marginBottom: 32, position: "relative" } },
+    // Month nav
+    e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
+      e("div", { onClick: () => setMonthOffset(monthOffset - 1), style: { cursor: "pointer", padding: "4px 12px", fontSize: 14, color: "#666", userSelect: "none", borderRadius: 4, border: "1px solid #e5e5e0", background: "#fff" } }, "\u2190"),
+      e("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, fontWeight: 600, letterSpacing: "0.5px", color: "#1a1a1a" } }, monthName.toUpperCase()),
+      e("div", { onClick: () => setMonthOffset(monthOffset + 1), style: { cursor: "pointer", padding: "4px 12px", fontSize: 14, color: "#666", userSelect: "none", borderRadius: 4, border: "1px solid #e5e5e0", background: "#fff" } }, "\u2192"),
+    ),
+    // Day headers
+    e("div", { style: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 2 } },
+      ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map(d => e("div", { key: d, style: { textAlign: "center", fontSize: 9, fontWeight: 600, color: "#999", fontFamily: "'IBM Plex Mono', monospace", padding: "4px 0" } }, d)),
+    ),
+    // Calendar grid
+    e("div", { style: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 } }, cells),
+
+    // Hover tooltip (fixed position, like matrix)
+    hovItem && !clickedId && e("div", {
+      onClick: (ev) => { ev.stopPropagation(); setClickPos({ x: hoverPos.x, y: hoverPos.y }); openEdit(hovItem); },
+      style: {
+        position: "fixed", left: hoverPos.x, top: hoverPos.y, zIndex: 1000,
+        background: "#1a1a1a", color: "#fff", padding: "8px 12px",
+        borderRadius: 6, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace",
+        minWidth: 180, maxWidth: 260, whiteSpace: "normal",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.25)", cursor: "pointer",
+        lineHeight: "16px", pointerEvents: "auto",
+      },
+    },
+      e("div", { style: { fontWeight: 600, marginBottom: 4 } }, hovItem.text),
+      e("div", { style: { fontSize: 9, color: "#aaa" } }, "P" + hovItem.priority + " \u00b7 " + formatDate(hovItem.date)),
+      e("div", { style: { fontSize: 8, color: "#666", marginTop: 4 } }, "Click to edit"),
+    ),
+
+    // Click-to-edit popover (fixed position)
+    clickItem && e("div", {
+      onClick: (ev) => ev.stopPropagation(),
+      style: {
+        position: "fixed", left: clickPos.x, top: clickPos.y, zIndex: 1001,
+        background: "#fff", border: "1px solid #e5e5e0", padding: "12px",
+        borderRadius: 8, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace",
+        minWidth: 220, maxWidth: 280, whiteSpace: "normal",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.18)", cursor: "default",
+      },
+    },
+      e("input", {
+        ref: editRef,
+        value: editText,
+        onChange: (ev) => setEditText(ev.target.value),
+        onKeyDown: (ev) => { if (ev.key === "Enter") saveEdit(); if (ev.key === "Escape") { setClickedId(null); setHoverId(null); } },
+        style: { width: "100%", fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", border: "1px solid #e5e5e0", borderRadius: 4, padding: "6px 8px", marginBottom: 8, outline: "none" },
+      }),
+      e("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } },
+        e("span", { style: { fontSize: 10, color: "#666" } }, "Priority:"),
+        e(PriorityPips, { value: editPriority, onChange: (v) => setEditPriority(v) }),
+      ),
+      e("div", { style: { display: "flex", gap: 6 } },
+        e("button", { onClick: saveEdit, style: { flex: 1, padding: "5px 0", fontSize: 10, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", background: "#1a1a1a", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", letterSpacing: "0.3px" } }, "SAVE"),
+        e("button", { onClick: () => { setClickedId(null); setHoverId(null); }, style: { flex: 1, padding: "5px 0", fontSize: 10, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", background: "#fff", color: "#666", border: "1px solid #e5e5e0", borderRadius: 4, cursor: "pointer", letterSpacing: "0.3px" } }, "CANCEL"),
+      ),
+    ),
+  );
+}
+
 /* ─── Sync Status Indicator ─── */
 function SyncBadge({ status }) {
   const colors = { syncing: "#2563EB", synced: "#2D8B4E", error: "#DC2626" };
@@ -399,6 +601,77 @@ function PasswordGate({ onAuth }) {
   );
 }
 
+/* ─── Email Settings ─── */
+function EmailSettings({ onClose }) {
+  const [emails, setEmails] = useState([]);
+  const [newEmail, setNewEmail] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/emails", { headers: { "Authorization": "Bearer " + getAuthToken() } })
+      .then(r => r.json()).then(d => { setEmails(d.emails || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const save = (updated) => {
+    setEmails(updated);
+    fetch("/api/emails", {
+      method: "PUT",
+      headers: { "Authorization": "Bearer " + getAuthToken(), "Content-Type": "application/json" },
+      body: JSON.stringify({ emails: updated }),
+    });
+  };
+
+  const addEmail = () => {
+    const em = newEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { setError("Invalid email"); return; }
+    if (emails.includes(em)) { setError("Already added"); return; }
+    save([...emails, em]);
+    setNewEmail("");
+    setError("");
+  };
+
+  const removeEmail = (em) => save(emails.filter(e => e !== em));
+
+  useEffect(() => {
+    const handler = (ev) => {
+      if (!ev.target.closest(".email-settings-panel")) onClose();
+    };
+    setTimeout(() => document.addEventListener("click", handler), 0);
+    return () => document.removeEventListener("click", handler);
+  }, [onClose]);
+
+  return e("div", { className: "email-settings-panel", style: {
+    position: "absolute", top: "100%", right: 0, marginTop: 8, zIndex: 100,
+    background: "#fff", border: "1px solid #e5e5e0", borderRadius: 8,
+    padding: 16, minWidth: 300, maxWidth: 360,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.12)", fontFamily: "'IBM Plex Mono', monospace",
+  }},
+    e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
+      e("span", { style: { fontSize: 11, fontWeight: 600, letterSpacing: "0.5px", color: "#666" } }, "DAILY EMAIL RECIPIENTS"),
+      e("span", { onClick: onClose, style: { cursor: "pointer", fontSize: 16, color: "#999", lineHeight: 1 } }, "\u00d7"),
+    ),
+    loading ? e("div", { style: { fontSize: 11, color: "#999" } }, "Loading\u2026") : e("div", null,
+      emails.length === 0 && e("div", { style: { fontSize: 11, color: "#aaa", marginBottom: 8 } }, "No recipients yet"),
+      emails.map(em => e("div", { key: em, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", marginBottom: 4, background: "#fafaf8", borderRadius: 4, fontSize: 12 } },
+        e("span", { style: { color: "#1a1a1a" } }, em),
+        e("span", { onClick: () => removeEmail(em), style: { cursor: "pointer", color: "#ccc", fontSize: 14, lineHeight: 1, padding: "0 4px" }, onMouseOver: (ev) => ev.target.style.color = "#DC2626", onMouseOut: (ev) => ev.target.style.color = "#ccc" }, "\u00d7"),
+      )),
+      e("div", { style: { display: "flex", gap: 6, marginTop: 8 } },
+        e("input", {
+          type: "email", value: newEmail, placeholder: "email@example.com",
+          onChange: (ev) => { setNewEmail(ev.target.value); setError(""); },
+          onKeyDown: (ev) => { if (ev.key === "Enter") addEmail(); },
+          style: { flex: 1, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", border: "1px solid #e5e5e0", borderRadius: 4, padding: "6px 8px", outline: "none" },
+        }),
+        e("button", { onClick: addEmail, style: { padding: "6px 12px", fontSize: 10, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", background: "#1a1a1a", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", letterSpacing: "0.3px" } }, "ADD"),
+      ),
+      error && e("div", { style: { fontSize: 10, color: "#DC2626", marginTop: 4 } }, error),
+    ),
+  );
+}
+
 /* ─── Main App ─── */
 function App() {
   const [authed, setAuthed] = useState(() => !!sessionStorage.getItem(AUTH_KEY));
@@ -414,6 +687,7 @@ function ChecklistApp() {
   const [view, setView] = useState("list");
   const [syncStatus, setSyncStatus] = useState("syncing");
   const [editingId, setEditingId] = useState(null);
+  const [showEmails, setShowEmails] = useState(false);
   const inputRefs = useRef({});
   const suppressNextBlur = useRef(false);
 
@@ -553,9 +827,13 @@ function ChecklistApp() {
           ["list", "plot"].map(v => e("div", { key: v, onClick: () => setView(v), style: {
             padding: "6px 14px", fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.5px", fontFamily: "'IBM Plex Mono', monospace",
             background: view === v ? "#1a1a1a" : "transparent", color: view === v ? "#fff" : "#999", transition: "all 0.2s ease",
-          } }, v === "list" ? "LIST" : "MATRIX"))
+          } }, v === "list" ? "LIST" : "VISUAL"))
         ),
         e(SyncBadge, { status: syncStatus }),
+        e("div", { style: { position: "relative" } },
+          e("div", { onClick: () => setShowEmails(!showEmails), style: { cursor: "pointer", fontSize: 16, color: showEmails ? "#1a1a1a" : "#999", padding: "4px 6px", borderRadius: 4, border: "1px solid " + (showEmails ? "#1a1a1a" : "#e5e5e0"), transition: "all 0.15s ease", lineHeight: 1 } }, "\u2709"),
+          showEmails && e(EmailSettings, { onClose: () => setShowEmails(false) }),
+        ),
       ),
     ),
 
@@ -570,8 +848,9 @@ function ChecklistApp() {
       ),
     ),
 
-    // Matrix
+    // Visual (Matrix + Calendar)
     view === "plot" && e(ScatterPlot, { tasks, onUpdate: updateFromPlot, catColors: CAT_COLORS }),
+    view === "plot" && e(MonthCalendar, { tasks, catColors: CAT_COLORS, onUpdateField: updateItemField }),
 
     // List
     view === "list" && e("div", null,

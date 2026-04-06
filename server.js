@@ -55,6 +55,48 @@ app.put("/api/tasks", requireAuth, (req, res) => {
   }
 });
 
+// Helper to read/write the whole data file
+function readData() {
+  if (!fs.existsSync(DATA_FILE)) return { tasks: [], emails: [] };
+  return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+}
+
+function writeData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
+}
+
+// GET /api/emails — return subscriber list
+app.get("/api/emails", requireAuth, (req, res) => {
+  try {
+    const data = readData();
+    res.json({ emails: data.emails || [] });
+  } catch (err) {
+    console.error("Error reading emails:", err.message);
+    res.status(500).json({ error: "Failed to read emails" });
+  }
+});
+
+// PUT /api/emails — replace subscriber list
+app.put("/api/emails", requireAuth, (req, res) => {
+  try {
+    const { emails } = req.body;
+    if (!Array.isArray(emails)) {
+      return res.status(400).json({ error: "emails array required" });
+    }
+    const valid = emails.every(e => typeof e === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    if (!valid) {
+      return res.status(400).json({ error: "Invalid email address" });
+    }
+    const data = readData();
+    data.emails = emails;
+    writeData(data);
+    res.json({ ok: true, emails });
+  } catch (err) {
+    console.error("Error writing emails:", err.message);
+    res.status(500).json({ error: "Failed to write emails" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log("Andes checklist server running on http://localhost:" + PORT);
 });

@@ -1,5 +1,5 @@
-app = "andes-checklist"
-primary_region = "sea"
+app = "andes-plan"
+primary_region = "sjc"
 
 [build]
 
