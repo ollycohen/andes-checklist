@@ -1,6 +1,6 @@
 const { Resend } = require("resend");
 
-const API_BASE = process.env.API_URL || "https://checklist.ollycohen.com";
+const API_BASE = process.env.API_URL || "https://andes-plan.fly.dev";
 const API_TOKEN = process.env.API_TOKEN;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_TO_FALLBACK = process.env.EMAIL_TO;
