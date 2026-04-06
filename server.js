@@ -39,16 +39,18 @@ app.get("/api/tasks", requireAuth, (req, res) => {
   }
 });
 
-// PUT /api/tasks — replace stored tasks
+// PUT /api/tasks — replace stored tasks (preserves other fields like emails)
 app.put("/api/tasks", requireAuth, (req, res) => {
   try {
     const { tasks, updatedAt } = req.body;
     if (!tasks || !Array.isArray(tasks)) {
       return res.status(400).json({ error: "Invalid payload: tasks array required" });
     }
-    const data = { tasks, updatedAt: updatedAt || new Date().toISOString() };
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
-    res.json({ ok: true, updatedAt: data.updatedAt });
+    const existing = readData();
+    existing.tasks = tasks;
+    existing.updatedAt = updatedAt || new Date().toISOString();
+    writeData(existing);
+    res.json({ ok: true, updatedAt: existing.updatedAt });
   } catch (err) {
     console.error("Error writing data.json:", err.message);
     res.status(500).json({ error: "Failed to write data" });
