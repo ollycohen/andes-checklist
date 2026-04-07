@@ -692,6 +692,9 @@ function ChecklistApp() {
   const [title, setTitle] = useState("Andes Expedition");
   const [editingTitle, setEditingTitle] = useState(false);
   const titleRef = useRef(null);
+  const [ownerName, setOwnerName] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const nameRef = useRef(null);
   const inputRefs = useRef({});
   const suppressNextBlur = useRef(false);
 
@@ -732,9 +735,12 @@ function ChecklistApp() {
         debouncedPush.current(loadTasks());
       }
     }).catch(() => setSyncStatus("error"));
-    // Fetch title
-    fetch("/api/title", { headers: { "Authorization": "Bearer " + getAuthToken() } })
+    // Fetch title and name
+    const authHeaders = { "Authorization": "Bearer " + getAuthToken() };
+    fetch("/api/title", { headers: authHeaders })
       .then(r => r.ok ? r.json() : null).then(d => { if (d && d.title) setTitle(d.title); });
+    fetch("/api/name", { headers: authHeaders })
+      .then(r => r.ok ? r.json() : null).then(d => { if (d && d.name) setOwnerName(d.name); });
   }, []);
 
   // Sync document.title with editable title
@@ -748,6 +754,15 @@ function ChecklistApp() {
       method: "PUT",
       headers: { "Authorization": "Bearer " + getAuthToken(), "Content-Type": "application/json" },
       body: JSON.stringify({ title: t }),
+    });
+  };
+
+  const saveName = (newName) => {
+    setOwnerName(newName);
+    fetch("/api/name", {
+      method: "PUT",
+      headers: { "Authorization": "Bearer " + getAuthToken(), "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName.trim() }),
     });
   };
 
@@ -898,7 +913,23 @@ function ChecklistApp() {
               onClick: () => { setEditingTitle(true); setTimeout(() => { if (titleRef.current) { titleRef.current.focus(); titleRef.current.select(); } }, 0); },
               style: { fontFamily: "'DM Serif Display', serif", fontSize: 32, letterSpacing: "-0.5px", marginBottom: 4, cursor: "text" },
             }, title),
-        e("div", { style: { fontSize: 12, color: "#999", letterSpacing: "0.5px" } }, "CHECKLIST"),
+        e("div", { style: { display: "flex", alignItems: "baseline", gap: 4, fontSize: 12, color: "#999", letterSpacing: "0.5px" } },
+          "CHECKLIST FOR ",
+          editingName
+            ? e("input", {
+                ref: nameRef,
+                value: ownerName,
+                onChange: (ev) => setOwnerName(ev.target.value),
+                onBlur: () => { saveName(ownerName); setEditingName(false); },
+                onKeyDown: (ev) => { if (ev.key === "Enter") { saveName(ownerName); setEditingName(false); } if (ev.key === "Escape") setEditingName(false); },
+                placeholder: "your name",
+                style: { fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.5px", color: "#1a1a1a", background: "transparent", border: "none", borderBottom: "1px solid #c9a96e", outline: "none", padding: 0, width: Math.max(80, ownerName.length * 8), textTransform: "uppercase", fontWeight: 600 },
+              })
+            : e("span", {
+                onClick: () => { setEditingName(true); setTimeout(() => { if (nameRef.current) { nameRef.current.focus(); nameRef.current.select(); } }, 0); },
+                style: { color: ownerName ? "#1a1a1a" : "#ccc", cursor: "text", fontWeight: 600, borderBottom: "1px dashed " + (ownerName ? "transparent" : "#ccc") },
+              }, ownerName || "your name"),
+        ),
       ),
       e("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, marginTop: 6 } },
         e("div", { style: { display: "flex", background: "#fff", border: "1px solid #e5e5e0", borderRadius: 6, overflow: "hidden" } },

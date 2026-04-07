@@ -127,6 +127,34 @@ app.put("/api/title", requireAuth, (req, res) => {
   }
 });
 
+// GET /api/name — return owner name
+app.get("/api/name", requireAuth, (req, res) => {
+  try {
+    const data = readData();
+    res.json({ name: data.name || "" });
+  } catch (err) {
+    console.error("Error reading name:", err.message);
+    res.status(500).json({ error: "Failed to read name" });
+  }
+});
+
+// PUT /api/name — update owner name
+app.put("/api/name", requireAuth, (req, res) => {
+  try {
+    const { name } = req.body;
+    if (typeof name !== "string") {
+      return res.status(400).json({ error: "Name string required" });
+    }
+    const data = readData();
+    data.name = name.trim();
+    writeData(data);
+    res.json({ ok: true, name: data.name });
+  } catch (err) {
+    console.error("Error writing name:", err.message);
+    res.status(500).json({ error: "Failed to write name" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log("Andes checklist server running on http://localhost:" + PORT);
 });

@@ -38,10 +38,14 @@ async function main() {
     return;
   }
 
-  // Fetch title
+  // Fetch title and owner name
   const titleRes = await fetch(`${API_BASE}/api/title`, { headers });
   const titleData = titleRes.ok ? await titleRes.json() : {};
   const projectTitle = titleData.title || "Andes Expedition";
+
+  const nameRes = await fetch(`${API_BASE}/api/name`, { headers });
+  const nameData = nameRes.ok ? await nameRes.json() : {};
+  const ownerName = nameData.name || "";
 
   // Fetch tasks from the live API
   const res = await fetch(`${API_BASE}/api/tasks`, { headers });
@@ -115,6 +119,10 @@ async function main() {
     <p style="color: #888; font-size: 12px; margin: 4px 0;">${formatDate(today)}</p>
     <p style="color: #888; font-size: 12px; margin: 0;">${pct}% complete (${doneItems}/${totalItems})</p>
   </div>
+
+  ${ownerName ? `<div style="background: #eef3ff; border-left: 3px solid #2563EB; padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0;">
+    <p style="margin: 0; font-size: 13px; color: #1e40af;">Note: You are receiving this email because <strong>${ownerName}</strong> needs your help. Can you please hold them accountable?</p>
+  </div>` : ""}
 
   <div style="background: #f0ebe3; border-left: 3px solid #c9a96e; padding: 14px 18px; margin: 20px 0; border-radius: 0 6px 6px 0;">
     <p style="margin: 0; font-size: 13px; color: #6b5c3e; font-style: italic;">${quote}</p>
