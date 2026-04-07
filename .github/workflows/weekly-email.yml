@@ -1,0 +1,27 @@
+name: Weekly Accountability Email
+
+on:
+  schedule:
+    # 6:00 AM Pacific (13:00 UTC) every Wednesday
+    - cron: "0 13 * * 3"
+  workflow_dispatch: {}
+
+jobs:
+  send-email:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install resend
+
+      - name: Send weekly accountability email
+        env:
+          API_TOKEN: ${{ secrets.CHECKLIST_SYNC_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_MODE: weekly
+        run: node scripts/daily-email.js

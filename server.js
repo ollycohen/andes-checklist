@@ -67,32 +67,38 @@ function writeData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
 }
 
-// GET /api/emails — return subscriber list
+// GET /api/emails — return subscriber lists
 app.get("/api/emails", requireAuth, (req, res) => {
   try {
     const data = readData();
-    res.json({ emails: data.emails || [] });
+    res.json({
+      dailyEmails: data.dailyEmails || data.emails || [],
+      weeklyEmails: data.weeklyEmails || [],
+    });
   } catch (err) {
     console.error("Error reading emails:", err.message);
     res.status(500).json({ error: "Failed to read emails" });
   }
 });
 
-// PUT /api/emails — replace subscriber list
+// PUT /api/emails — replace subscriber lists
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 app.put("/api/emails", requireAuth, (req, res) => {
   try {
-    const { emails } = req.body;
-    if (!Array.isArray(emails)) {
-      return res.status(400).json({ error: "emails array required" });
+    const { dailyEmails, weeklyEmails } = req.body;
+    if (!Array.isArray(dailyEmails) || !Array.isArray(weeklyEmails)) {
+      return res.status(400).json({ error: "dailyEmails and weeklyEmails arrays required" });
     }
-    const valid = emails.every(e => typeof e === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
-    if (!valid) {
+    const allValid = [...dailyEmails, ...weeklyEmails].every(e => typeof e === "string" && emailRegex.test(e));
+    if (!allValid) {
       return res.status(400).json({ error: "Invalid email address" });
     }
     const data = readData();
-    data.emails = emails;
+    data.dailyEmails = dailyEmails;
+    data.weeklyEmails = weeklyEmails;
+    delete data.emails; // migrate away from old field
     writeData(data);
-    res.json({ ok: true, emails });
+    res.json({ ok: true, dailyEmails, weeklyEmails });
   } catch (err) {
     console.error("Error writing emails:", err.message);
     res.status(500).json({ error: "Failed to write emails" });

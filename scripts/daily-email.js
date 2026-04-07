@@ -4,6 +4,7 @@ const API_BASE = process.env.API_URL || "https://plan.ollycohen.com";
 const API_TOKEN = process.env.API_TOKEN;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_TO_FALLBACK = process.env.EMAIL_TO;
+const MODE = process.env.EMAIL_MODE || "daily"; // "daily" or "weekly"
 
 const QUOTES = [
   "Tích tiểu thành đại — gather small things to make something great.",
@@ -23,20 +24,24 @@ async function main() {
 
   const headers = { Authorization: `Bearer ${API_TOKEN}` };
 
-  // Fetch recipients from the API, fall back to EMAIL_TO env var
+  // Fetch recipients from the API based on mode
   const emailRes = await fetch(`${API_BASE}/api/emails`, { headers });
   if (!emailRes.ok) {
     console.error(`Failed to fetch emails: ${emailRes.status} ${emailRes.statusText}`);
   }
-  const emailData = emailRes.ok ? await emailRes.json() : { emails: [] };
-  const recipients = emailData.emails && emailData.emails.length > 0
-    ? emailData.emails
-    : EMAIL_TO_FALLBACK ? [EMAIL_TO_FALLBACK] : [];
+  const emailData = emailRes.ok ? await emailRes.json() : {};
+  const dailyList = emailData.dailyEmails || [];
+  const weeklyList = emailData.weeklyEmails || [];
+  const recipients = MODE === "weekly"
+    ? weeklyList
+    : dailyList.length > 0 ? dailyList : (EMAIL_TO_FALLBACK ? [EMAIL_TO_FALLBACK] : []);
 
   if (recipients.length === 0) {
-    console.log("No email recipients configured. Skipping.");
+    console.log(`No ${MODE} email recipients configured. Skipping.`);
     return;
   }
+
+  console.log(`Sending ${MODE} email to ${recipients.length} recipient(s)`);
 
   // Fetch title and owner name
   const titleRes = await fetch(`${API_BASE}/api/title`, { headers });

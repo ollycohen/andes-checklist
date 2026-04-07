@@ -603,36 +603,42 @@ function PasswordGate({ onAuth }) {
 
 /* ─── Email Settings ─── */
 function EmailSettings({ onClose }) {
-  const [emails, setEmails] = useState([]);
-  const [newEmail, setNewEmail] = useState("");
+  const [dailyEmails, setDailyEmails] = useState([]);
+  const [weeklyEmails, setWeeklyEmails] = useState([]);
+  const [newDaily, setNewDaily] = useState("");
+  const [newWeekly, setNewWeekly] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/emails", { headers: { "Authorization": "Bearer " + getAuthToken() } })
-      .then(r => r.json()).then(d => { setEmails(d.emails || []); setLoading(false); })
+      .then(r => r.json()).then(d => { setDailyEmails(d.dailyEmails || []); setWeeklyEmails(d.weeklyEmails || []); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
-  const save = (updated) => {
-    setEmails(updated);
+  const save = (daily, weekly) => {
+    setDailyEmails(daily);
+    setWeeklyEmails(weekly);
     fetch("/api/emails", {
       method: "PUT",
       headers: { "Authorization": "Bearer " + getAuthToken(), "Content-Type": "application/json" },
-      body: JSON.stringify({ emails: updated }),
+      body: JSON.stringify({ dailyEmails: daily, weeklyEmails: weekly }),
     });
   };
 
-  const addEmail = () => {
-    const em = newEmail.trim().toLowerCase();
+  const addTo = (list, setInput, input, other) => {
+    const em = input.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { setError("Invalid email"); return; }
-    if (emails.includes(em)) { setError("Already added"); return; }
-    save([...emails, em]);
-    setNewEmail("");
+    if (list.includes(em)) { setError("Already added"); return; }
+    setInput("");
     setError("");
+    return [...list, em];
   };
 
-  const removeEmail = (em) => save(emails.filter(e => e !== em));
+  const addDaily = () => { const r = addTo(dailyEmails, setNewDaily, newDaily); if (r) save(r, weeklyEmails); };
+  const addWeekly = () => { const r = addTo(weeklyEmails, setNewWeekly, newWeekly); if (r) save(dailyEmails, r); };
+  const removeDaily = (em) => save(dailyEmails.filter(e => e !== em), weeklyEmails);
+  const removeWeekly = (em) => save(dailyEmails, weeklyEmails.filter(e => e !== em));
 
   useEffect(() => {
     const handler = (ev) => {
@@ -642,31 +648,39 @@ function EmailSettings({ onClose }) {
     return () => document.removeEventListener("click", handler);
   }, [onClose]);
 
+  const emailList = (title, desc, emails, removeEmail, newVal, setNewVal, addFn) => e("div", { style: { marginBottom: 14 } },
+    e("div", { style: { fontSize: 10, fontWeight: 600, letterSpacing: "0.5px", color: "#666", marginBottom: 6 } }, title),
+    e("div", { style: { fontSize: 9, color: "#aaa", marginBottom: 6 } }, desc),
+    emails.length === 0 && e("div", { style: { fontSize: 11, color: "#ccc", marginBottom: 4 } }, "None yet"),
+    emails.map(em => e("div", { key: em, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 8px", marginBottom: 3, background: "#fafaf8", borderRadius: 4, fontSize: 11 } },
+      e("span", { style: { color: "#1a1a1a" } }, em),
+      e("span", { onClick: () => removeEmail(em), style: { cursor: "pointer", color: "#ccc", fontSize: 14, lineHeight: 1, padding: "0 4px" }, onMouseOver: (ev) => ev.target.style.color = "#DC2626", onMouseOut: (ev) => ev.target.style.color = "#ccc" }, "\u00d7"),
+    )),
+    e("div", { style: { display: "flex", gap: 6, marginTop: 6 } },
+      e("input", {
+        type: "email", value: newVal, placeholder: "email@example.com",
+        onChange: (ev) => { setNewVal(ev.target.value); setError(""); },
+        onKeyDown: (ev) => { if (ev.key === "Enter") addFn(); },
+        style: { flex: 1, fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", border: "1px solid #e5e5e0", borderRadius: 4, padding: "5px 8px", outline: "none" },
+      }),
+      e("button", { onClick: addFn, style: { padding: "5px 10px", fontSize: 9, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", background: "#1a1a1a", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", letterSpacing: "0.3px" } }, "ADD"),
+    ),
+  );
+
   return e("div", { className: "email-settings-panel", style: {
     position: "absolute", top: "100%", right: 0, marginTop: 8, zIndex: 100,
     background: "#fff", border: "1px solid #e5e5e0", borderRadius: 8,
-    padding: 16, minWidth: 300, maxWidth: 360,
+    padding: 16, minWidth: 320, maxWidth: 380,
     boxShadow: "0 8px 24px rgba(0,0,0,0.12)", fontFamily: "'IBM Plex Mono', monospace",
   }},
-    e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
-      e("span", { style: { fontSize: 11, fontWeight: 600, letterSpacing: "0.5px", color: "#666" } }, "DAILY EMAIL RECIPIENTS"),
+    e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } },
+      e("span", { style: { fontSize: 11, fontWeight: 600, letterSpacing: "0.5px", color: "#666" } }, "EMAIL RECIPIENTS"),
       e("span", { onClick: onClose, style: { cursor: "pointer", fontSize: 16, color: "#999", lineHeight: 1 } }, "\u00d7"),
     ),
     loading ? e("div", { style: { fontSize: 11, color: "#999" } }, "Loading\u2026") : e("div", null,
-      emails.length === 0 && e("div", { style: { fontSize: 11, color: "#aaa", marginBottom: 8 } }, "No recipients yet"),
-      emails.map(em => e("div", { key: em, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", marginBottom: 4, background: "#fafaf8", borderRadius: 4, fontSize: 12 } },
-        e("span", { style: { color: "#1a1a1a" } }, em),
-        e("span", { onClick: () => removeEmail(em), style: { cursor: "pointer", color: "#ccc", fontSize: 14, lineHeight: 1, padding: "0 4px" }, onMouseOver: (ev) => ev.target.style.color = "#DC2626", onMouseOut: (ev) => ev.target.style.color = "#ccc" }, "\u00d7"),
-      )),
-      e("div", { style: { display: "flex", gap: 6, marginTop: 8 } },
-        e("input", {
-          type: "email", value: newEmail, placeholder: "email@example.com",
-          onChange: (ev) => { setNewEmail(ev.target.value); setError(""); },
-          onKeyDown: (ev) => { if (ev.key === "Enter") addEmail(); },
-          style: { flex: 1, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", border: "1px solid #e5e5e0", borderRadius: 4, padding: "6px 8px", outline: "none" },
-        }),
-        e("button", { onClick: addEmail, style: { padding: "6px 12px", fontSize: 10, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", background: "#1a1a1a", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", letterSpacing: "0.3px" } }, "ADD"),
-      ),
+      emailList("DAILY (6 AM PT)", "You \u2014 every morning", dailyEmails, removeDaily, newDaily, setNewDaily, addDaily),
+      e("div", { style: { borderTop: "1px solid #e5e5e0", marginBottom: 14 } }),
+      emailList("WEEKLY (WED 6 AM PT)", "Friends \u2014 accountability check", weeklyEmails, removeWeekly, newWeekly, setNewWeekly, addWeekly),
       error && e("div", { style: { fontSize: 10, color: "#DC2626", marginTop: 4 } }, error),
     ),
   );

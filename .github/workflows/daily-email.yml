@@ -2,9 +2,18 @@ name: Daily Email Update
 
 on:
   schedule:
-    # 7:00 AM Pacific (14:00 UTC) every day
-    - cron: "0 14 * * *"
-  workflow_dispatch: # allow manual trigger
+    # 6:00 AM Pacific (13:00 UTC) every day
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Email mode"
+        required: false
+        default: "daily"
+        type: choice
+        options:
+          - daily
+          - weekly
 
 jobs:
   send-email:
@@ -24,4 +33,5 @@ jobs:
           API_TOKEN: ${{ secrets.CHECKLIST_SYNC_TOKEN }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_MODE: ${{ github.event.inputs.mode || 'daily' }}
         run: node scripts/daily-email.js
