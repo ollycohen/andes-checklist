@@ -16,5 +16,8 @@
   "license": "ISC",
   "dependencies": {
     "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "resend": "^6.10.0"
   }
 }

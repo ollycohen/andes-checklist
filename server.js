@@ -161,6 +161,36 @@ app.put("/api/name", requireAuth, (req, res) => {
   }
 });
 
+// One-time migration: backfill completedAt on done items that lack it
+function migrateCompletedAt() {
+  const data = readData();
+  if (!data.tasks || !Array.isArray(data.tasks)) return;
+  let count = 0;
+  const now = new Date().toISOString();
+  for (const cat of data.tasks) {
+    for (const item of cat.items) {
+      if (item.done && !item.completedAt) {
+        item.completedAt = now;
+        count++;
+      }
+      if (item.subtasks) {
+        for (const sub of item.subtasks) {
+          if (sub.done && !sub.completedAt) {
+            sub.completedAt = now;
+            count++;
+          }
+        }
+      }
+    }
+  }
+  if (count > 0) {
+    writeData(data);
+    console.log(`Backfilled ${count} item(s) with completedAt`);
+  }
+}
+
+migrateCompletedAt();
+
 app.listen(PORT, () => {
   console.log("Andes checklist server running on http://localhost:" + PORT);
 });

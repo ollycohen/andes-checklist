@@ -76,8 +76,42 @@ async function main() {
       .map((item) => ({ ...item, category: cat.category, icon: cat.icon }))
   );
 
+  // Overdue items (dated before today and still undone)
+  const overdue = allItems
+    .filter((item) => {
+      if (!item.date) return false;
+      const d = new Date(item.date + "T00:00:00");
+      return d < today;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+
   // Items due today
   const dueToday = allItems.filter((item) => item.date === todayStr);
+
+  // Items (and subtasks) completed within the last 7 days
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 7);
+  const recentlyCompleted = data.tasks.flatMap((cat) => {
+    const out = [];
+    for (const item of cat.items) {
+      if (item.done && item.completedAt && new Date(item.completedAt) >= sevenDaysAgo) {
+        out.push({ ...item, category: cat.category, icon: cat.icon });
+      }
+      if (item.subtasks) {
+        for (const sub of item.subtasks) {
+          if (sub.done && sub.completedAt && new Date(sub.completedAt) >= sevenDaysAgo) {
+            out.push({
+              ...sub,
+              text: `${item.text} → ${sub.text}`,
+              category: cat.category,
+              icon: cat.icon,
+            });
+          }
+        }
+      }
+    }
+    return out;
+  }).sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""));
 
   // Items due this week (including today)
   const dueThisWeek = allItems.filter((item) => {
@@ -133,10 +167,12 @@ async function main() {
     <p style="margin: 0; font-size: 13px; color: #6b5c3e; font-style: italic;">${quote}</p>
   </div>
 
+  ${section("⚠️ Overdue", overdue)}
   ${section("📌 Today", dueToday)}
   ${section("📅 This Week", dueThisWeek)}
   ${section("🗓️ This Month", dueThisMonth)}
   ${section("🔥 High Priority (undated)", highPriUndated)}
+  ${section("✅ Completed (last 7 days)", recentlyCompleted, { done: true })}
 
   <div style="text-align: center; padding: 20px 0; border-top: 1px solid #e0e0e0; margin-top: 20px;">
     <a href="https://plan.ollycohen.com" style="color: #c9a96e; text-decoration: none; font-size: 13px;">Open Checklist →</a>
@@ -161,21 +197,24 @@ async function main() {
   console.log("Daily email sent successfully.");
 }
 
-function section(title, items) {
+function section(title, items, opts = {}) {
   if (items.length === 0) {
     return `
     <div style="margin: 16px 0;">
       <h3 style="font-size: 14px; margin: 0 0 8px; color: #555;">${title}</h3>
-      <p style="font-size: 13px; color: #aaa; margin: 0 0 0 12px;">Nothing scheduled</p>
+      <p style="font-size: 13px; color: #aaa; margin: 0 0 0 12px;">${opts.done ? "Nothing completed" : "Nothing scheduled"}</p>
     </div>`;
   }
   const rows = items
     .map((item) => {
       const pips = "●".repeat(item.priority || 0) + "○".repeat(5 - (item.priority || 0));
-      const dateTag = item.date ? `<span style="color: #888; font-size: 11px;"> — ${item.date}</span>` : "";
+      const tag = opts.done && item.completedAt
+        ? `<span style="color: #888; font-size: 11px;"> — ${item.completedAt.slice(0, 10)}</span>`
+        : item.date ? `<span style="color: #888; font-size: 11px;"> — ${item.date}</span>` : "";
+      const textStyle = opts.done ? "text-decoration: line-through; color: #888;" : "";
       return `<tr>
         <td style="padding: 4px 8px; font-size: 13px; color: #c9a96e; white-space: nowrap;">${pips}</td>
-        <td style="padding: 4px 8px; font-size: 13px;">${item.icon} ${item.text}${dateTag}</td>
+        <td style="padding: 4px 8px; font-size: 13px; ${textStyle}">${item.icon} ${item.text}${tag}</td>
       </tr>`;
     })
     .join("");

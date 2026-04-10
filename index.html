@@ -731,23 +731,56 @@ function ChecklistApp() {
   }
 
   // Fetch remote on mount — server is source of truth
+  // Backfill completedAt on done items that lack it (legacy data)
+  const backfillCompletedAt = (tasksList) => {
+    const now = new Date().toISOString();
+    let changed = false;
+    const patched = tasksList.map(cat => ({
+      ...cat,
+      items: cat.items.map(item => {
+        let it = item;
+        if (it.done && !it.completedAt) { it = { ...it, completedAt: now }; changed = true; }
+        if (it.subtasks) {
+          const subs = it.subtasks.map(s => {
+            if (s.done && !s.completedAt) { changed = true; return { ...s, completedAt: now }; }
+            return s;
+          });
+          if (subs !== it.subtasks) it = { ...it, subtasks: subs };
+        }
+        return it;
+      }),
+    }));
+    return { patched, changed };
+  };
+
   useEffect(() => {
     setSyncStatus("syncing");
     fetchRemoteTasks().then(remote => {
+      let resolved;
       if (remote) {
         const localMeta = loadTasksWithMeta();
         const remoteNewer = !localMeta.updatedAt || !remote.updatedAt ||
           new Date(remote.updatedAt) >= new Date(localMeta.updatedAt);
-        if (remoteNewer) {
-          setTasks(remote.tasks);
-          persistTasks(remote.tasks);
-        } else {
-          debouncedPush.current(localMeta.tasks);
-        }
-        setSyncStatus("synced");
+        resolved = remoteNewer ? remote.tasks : localMeta.tasks;
       } else {
-        debouncedPush.current(loadTasks());
+        resolved = loadTasks();
       }
+      // Backfill completedAt on any done items missing it
+      const { patched, changed } = backfillCompletedAt(resolved);
+      setTasks(patched);
+      persistTasks(patched);
+      if (changed) {
+        debouncedPush.current(patched);
+      } else if (remote) {
+        // Only push if local was newer and no backfill happened
+        const localMeta = loadTasksWithMeta();
+        const remoteNewer = !localMeta.updatedAt || !remote.updatedAt ||
+          new Date(remote.updatedAt) >= new Date(localMeta.updatedAt);
+        if (!remoteNewer) debouncedPush.current(patched);
+      } else {
+        debouncedPush.current(patched);
+      }
+      setSyncStatus("synced");
     }).catch(() => setSyncStatus("error"));
     // Fetch title and name
     const authHeaders = { "Authorization": "Bearer " + getAuthToken() };
@@ -794,10 +827,10 @@ function ChecklistApp() {
   };
 
   const toggleTask = (catIdx, itemId) => {
-    saveTasks(tasks.map((cat, ci) => ci === catIdx ? { ...cat, items: cat.items.map(it => it.id === itemId ? { ...it, done: !it.done } : it) } : cat));
+    saveTasks(tasks.map((cat, ci) => ci === catIdx ? { ...cat, items: cat.items.map(it => it.id === itemId ? { ...it, done: !it.done, completedAt: !it.done ? new Date().toISOString() : null } : it) } : cat));
   };
   const toggleSubtask = (catIdx, itemId, subId) => {
-    saveTasks(tasks.map((cat, ci) => ci === catIdx ? { ...cat, items: cat.items.map(it => it.id === itemId ? { ...it, subtasks: (it.subtasks||[]).map(s => s.id === subId ? { ...s, done: !s.done } : s) } : it) } : cat));
+    saveTasks(tasks.map((cat, ci) => ci === catIdx ? { ...cat, items: cat.items.map(it => it.id === itemId ? { ...it, subtasks: (it.subtasks||[]).map(s => s.id === subId ? { ...s, done: !s.done, completedAt: !s.done ? new Date().toISOString() : null } : s) } : it) } : cat));
   };
   const updateItemField = (itemId, field, value) => {
     saveTasks(tasks.map(cat => ({ ...cat, items: cat.items.map(item => {
